@@ -6,7 +6,7 @@ import Combine
 struct MiVerifyView: View {
     let verifyUrl: String
     @Environment(\.presentationMode) var present
-    @State private var status = "请在下方完成小米身份验证（短信确认）"
+    @State private var status = "请输入收到的短信验证码完成验证"
     @State private var done = false
 
     var body: some View {
@@ -66,7 +66,10 @@ struct VerifyWeb: UIViewRepresentable {
         func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
                      decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
             let url = action.request.url?.absoluteString ?? ""
-            if let r = url.range(of: "ticket=") {
+            let host = action.request.url?.host ?? ""
+            // 只在真正的 STS 回调域名上取票，避免掐断验证流程内部的 ticket 参数
+            let isCallback = host.contains("sts.api.io.mi.com") || (url.contains("ticket=ST-"))
+            if isCallback, let r = url.range(of: "ticket=") {
                 let rest = String(url[r.upperBound...])
                 let ticket = rest.split(separator: "&").first.map(String.init) ?? ""
                 if !ticket.isEmpty {
