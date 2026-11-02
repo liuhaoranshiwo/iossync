@@ -67,8 +67,11 @@ final class MiCloud {
                     }.resume()
                 } else {
                     self?.persist()
+                    // 把服务器原始响应暴露出来用于定位（含 securityStatus/notificationUrl 等）
+                    let raw = String(data: d2, encoding: .utf8) ?? ""
+                    let body = raw.replacingOccurrences(of: "&&&START&&&", with: "")
                     DispatchQueue.main.async {
-                        completion("登录返回无 location（账号可能需要二次验证）")
+                        completion("无location。服务器原始响应：\n" + String(body.prefix(500)))
                     }
                 }
             }.resume()
