@@ -103,6 +103,6 @@ final class MiCloud {
     static func formBody(_ params: [String: String]) -> Data {
         var comps = URLComponents()
         comps.queryItems = params.map { URLQueryItem(name: $0.key, value: $0.value) }
-        return Data(comps.percentEncodedQuery?.utf8 ?? Data().utf8)
+        return Data((comps.percentEncodedQuery ?? "").utf8)
     }
 }
