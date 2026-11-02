@@ -53,8 +53,10 @@ final class LocationReader: NSObject, ObservableObject, CLLocationManagerDelegat
         let geocoder = CLGeocoder()
         geocoder.reverseGeocodeLocation(loc) { [weak self] placemarks, _ in
             guard let self = self else { return }
-            if let city = placemarks?.first?.locality, !city.isEmpty {
-                self.name = city
+            if let p = placemarks?.first {
+                let city = [p.locality, p.subAdministrativeArea, p.administrativeArea, p.name]
+                    .compactMap { $0 }.first { !$0.isEmpty }
+                if let c = city { self.name = c }
             }
             let cb = self.handler
             self.handler = nil
