@@ -50,7 +50,42 @@ final class WatchClient {
         }.resume()
     }
 
-    /// 测试手表连通性
+    /// 手表传感器快照（上行：手表 → 手机）
+    func fetchSensors(completion: @escaping ([String: Any]?) -> Void) {
+        guard let url = URL(string: baseURL + "/sensors") else {
+            DispatchQueue.main.async { completion(nil) }
+            return
+        }
+        var req = URLRequest(url: url, timeoutInterval: 5)
+        req.httpMethod = "GET"
+        URLSession.shared.dataTask(with: req) { data, resp, _ in
+            var dict: [String: Any]?
+            if let http = resp as? HTTPURLResponse, http.statusCode == 200, let data = data,
+               let j = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                dict = j
+            }
+            DispatchQueue.main.async { completion(dict) }
+        }.resume()
+    }
+
+    /// 下行推送：发文本消息到手表显示
+    func pushMessage(_ text: String, completion: @escaping (Bool) -> Void) {
+        guard let url = URL(string: baseURL + "/notify") else {
+            DispatchQueue.main.async { completion(false) }
+            return
+        }
+        var req = URLRequest(url: url, timeoutInterval: 6)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["text": text])
+        URLSession.shared.dataTask(with: req) { _, resp, _ in
+            DispatchQueue.main.async {
+                completion((resp as? HTTPURLResponse)?.statusCode == 200)
+            }
+        }.resume()
+    }
+
+    /// 测试连通性
     func ping(completion: @escaping (Bool) -> Void) {
         guard let url = URL(string: baseURL + "/ping") else {
             DispatchQueue.main.async { completion(false) }

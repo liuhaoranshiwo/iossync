@@ -13,6 +13,18 @@ struct ContentView: View {
     @State private var addrDraft = ""
     @State private var pingOK: Bool?
 
+    // 手表传感器（上行）
+    @State private var watchHR = 0
+    @State private var watchSpo2 = 0.0
+    @State private var watchTemp = 0.0
+    @State private var watchSteps = 0
+    @State private var watchAlt = 0.0
+    @State private var sensorsOnline = false
+    @State private var sensorTimer: Timer?
+
+    // 下行推送
+    @State private var msgDraft = ""
+
     private let cardGradient = LinearGradient(
         colors: [Color(red: 0.23, green: 0.51, blue: 0.96), Color(red: 0.49, green: 0.31, blue: 0.96)],
         startPoint: .topLeading, endPoint: .bottomTrailing)
@@ -27,20 +39,15 @@ struct ContentView: View {
             ZStack {
                 bgGradient.ignoresSafeArea()
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: 16) {
-                        header
-                        metricCard(icon: "figure.walk",
-                                   colors: [Color(red: 1.0, green: 0.62, blue: 0.25), Color(red: 1.0, green: 0.42, blue: 0.35)],
-                                   title: "今日步数", value: "\(Int(health.steps))", unit: "步")
-                        metricCard(icon: "heart.fill",
-                                   colors: [Color(red: 1.0, green: 0.34, blue: 0.48), Color(red: 0.94, green: 0.22, blue: 0.42)],
-                                   title: "最近心率", value: health.heartRate > 0 ? "\(Int(health.heartRate))" : "—", unit: "bpm")
-                        locationCard
-                        statusCard
-                        syncButton
-                        bleButton
-                        footer
-                    }
+                VStack(spacing: 16) {
+                    header
+                    watchHealthSection
+                    iphonePushSection
+                    statusCard
+                    syncButton
+                    bleButton
+                    footer
+                }
                     .padding(.horizontal, 20)
                     .padding(.top, 8)
                     .padding(.bottom, 24)
@@ -64,10 +71,178 @@ struct ContentView: View {
         .preferredColorScheme(.dark)
         .onAppear {
             health.requestAuth { _ in health.fetchAll {} }
+            startSensorPolling()
         }
     }
 
-    // MARK: - 组件
+    /// 每 15 秒拉取手表传感器快照（上行：手表健康 → 手机）
+    private func startSensorPolling() {
+        refreshSensors()
+        sensorTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { _ in
+            refreshSensors()
+        }
+    }
+
+    private func refreshSensors() {
+        client.fetchSensors { dict in
+            guard let d = dict else { sensorsOnline = false; return }
+            sensorsOnline = true
+            watchHR = d["heart_rate"] as? Int ?? watchHR
+            watchSpo2 = d["spo2"] as? Double ?? watchSpo2
+            watchTemp = d["body_temp"] as? Double ?? watchTemp
+            watchSteps = d["steps_today"] as? Int ?? watchSteps
+            watchAlt = d["altitude_m"] as? Double ?? watchAlt
+        }
+    }
+
+    // MARK: - 上行：手表健康
+
+    private var watchHealthSection: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Text("手表健康")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                Spacer()
+                Circle()
+                    .fill(sensorsOnline ? Color.green : Color.orange)
+                    .frame(width: 8, height: 8)
+                Text(sensorsOnline ? "实时在线" : "连接中")
+                    .font(.caption2)
+                    .foregroundColor(.white.opacity(0.5))
+            }
+            HStack(spacing: 10) {
+                miniMetric(icon: "heart.fill", colors: [Color(red: 1.0, green: 0.34, blue: 0.48), Color(red: 0.94, green: 0.22, blue: 0.42)],
+                           value: watchHR > 0 ? "\(watchHR)" : "—", unit: "bpm", label: "心率")
+                miniMetric(icon: "lungs.fill", colors: [Color(red: 0.30, green: 0.72, blue: 0.96), Color(red: 0.25, green: 0.50, blue: 0.96)],
+                           value: watchSpo2 > 0 ? "\(Int(watchSpo2))" : "—", unit: "%", label: "血氧")
+            }
+            HStack(spacing: 10) {
+                miniMetric(icon: "thermometer.variable", colors: [Color(red: 1.0, green: 0.58, blue: 0.25), Color(red: 1.0, green: 0.40, blue: 0.30)],
+                           value: watchTemp > 0 ? String(format: "%.1f", watchTemp) : "—", unit: "°C", label: "体温")
+                miniMetric(icon: "figure.walk", colors: [Color(red: 0.35, green: 0.80, blue: 0.50), Color(red: 0.20, green: 0.62, blue: 0.45)],
+                           value: "\(watchSteps)", unit: "步", label: "今日")
+            }
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(Color.white.opacity(0.06))
+                .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.white.opacity(0.09)))
+        )
+    }
+
+    private func miniMetric(icon: String, colors: [Color], value: String, unit: String, label: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundColor(.white)
+                .frame(width: 34, height: 34)
+                .background(LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+            VStack(alignment: .leading, spacing: 0) {
+                Text(value)
+                    .font(.system(size: 21, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+                Text("\(label) \(unit)")
+                    .font(.caption2)
+                    .foregroundColor(.white.opacity(0.45))
+            }
+            Spacer()
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 14).fill(Color.white.opacity(0.05)))
+    }
+
+    // MARK: - 下行：手机 → 手表
+
+    private var iphonePushSection: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Text("推送到手表")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                Spacer()
+            }
+            HStack(spacing: 10) {
+                Image(systemName: "location.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 34, height: 34)
+                    .background(LinearGradient(colors: [Color(red: 0.25, green: 0.62, blue: 1.0), Color(red: 0.40, green: 0.35, blue: 0.95)],
+                                               startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(location.name)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(.white)
+                    Text("定位推送（手表 GPS 失效时使用）")
+                        .font(.caption2)
+                        .foregroundColor(.white.opacity(0.45))
+                }
+                Spacer()
+                Button {
+                    syncing = true
+                    status = "推送定位…"
+                    location.locate { lat, lon, name in
+                        client.sync(steps: Int(health.steps), heartRate: Int(health.heartRate),
+                                    lat: lat, lon: lon, name: name) { msg in
+                            status = "定位: " + msg
+                            syncing = false
+                        }
+                    }
+                } label: {
+                    Text("推送")
+                        .font(.caption.bold())
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(cardGradient)
+                        .clipShape(Capsule())
+                }
+                .disabled(syncing)
+            }
+            HStack(spacing: 10) {
+                Image(systemName: "bubble.left.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 34, height: 34)
+                    .background(LinearGradient(colors: [Color(red: 1.0, green: 0.75, blue: 0.30), Color(red: 1.0, green: 0.55, blue: 0.20)],
+                                               startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                TextField("给手表发条消息…", text: $msgDraft)
+                    .font(.subheadline)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.07)))
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                Button {
+                    let text = msgDraft.trimmingCharacters(in: .whitespaces)
+                    guard !text.isEmpty else { return }
+                    client.pushMessage(text) { ok in
+                        status = ok ? "消息已推送到手表 ✓" : "消息推送失败"
+                    }
+                    msgDraft = ""
+                } label: {
+                    Text("发送")
+                        .font(.caption.bold())
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.white.opacity(0.14))
+                        .clipShape(Capsule())
+                }
+            }
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(Color.white.opacity(0.06))
+                .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.white.opacity(0.09)))
+        )
+    }
 
     private var header: some View {
         HStack(spacing: 12) {
