@@ -16,6 +16,8 @@ struct MiFace: Equatable {
     var showRing: Bool = true
     var fontScale: Double = 1.0
     var stepGoal: Int = 8000
+    /// 复杂功能位（对应官方 ComplicationSlot）：最多 3 位，值域 steps/hr/battery/date/none
+    var slots: [String] = ["steps", "hr", "battery"]
 
     func dict() -> [String: Any] {
         [
@@ -25,6 +27,7 @@ struct MiFace: Equatable {
             "show_steps": showSteps, "show_hr": showHr, "show_battery": showBattery,
             "show_ring": showRing,
             "font_scale": fontScale, "step_goal": stepGoal,
+            "slots": slots,
         ]
     }
 
@@ -44,6 +47,15 @@ struct MiFace: Equatable {
         f.showRing = j["show_ring"] as? Bool ?? f.showRing
         f.fontScale = (j["font_scale"] as? Double) ?? f.fontScale
         f.stepGoal = (j["step_goal"] as? Int) ?? f.stepGoal
+        if let arr = j["slots"] as? [String] {
+            f.slots = Array(arr.prefix(3))
+        } else {
+            var d: [String] = []
+            if f.showSteps { d.append("steps") }
+            if f.showHr { d.append("hr") }
+            if f.showBattery { d.append("battery") }
+            f.slots = d
+        }
         return f
     }
 }
@@ -157,10 +169,7 @@ struct MiFacePreview: View {
                             let dp = ctx.resolve(Text(dateText).font(.system(size: ss * 0.044)).foregroundColor(.gray))
                             ctx.draw(dp, at: CGPoint(x: ss * 0.135, y: ss * 0.545), anchor: .leading)
                         }
-                        var rows: [(String, String)] = []
-                        if face.showSteps { rows.append((fmtSteps(steps), "步")) }
-                        if face.showHr { rows.append((hr > 0 ? "\(hr)" : "--", "心率")) }
-                        if face.showBattery { rows.append(("\(battery)%", "电量")) }
+                        let rows = slotCells(short: true)
                         var y = ss * 0.40
                         for (v, l) in rows {
                             let vp = ctx.resolve(Text(v).font(.system(size: ss * 0.062, weight: .semibold)).foregroundColor(.white))
@@ -179,8 +188,7 @@ struct MiFacePreview: View {
                         }
                         var items: [String] = []
                         if face.showDate { items.append(dateText) }
-                        if face.showSteps { items.append("\(fmtSteps(steps)) 步") }
-                        if face.showBattery { items.append("\(battery)%") }
+                        for c in slotCells(short: true) { items.append("\(c.0) \(c.1)") }
                         if !items.isEmpty {
                             let dp = ctx.resolve(Text(items.joined(separator: "  ·  ")).font(.system(size: ss * 0.042)).foregroundColor(.gray))
                             ctx.draw(dp, at: CGPoint(x: ss / 2, y: ss * 0.745), anchor: .center)
@@ -213,10 +221,7 @@ struct MiFacePreview: View {
                             ctx.draw(dp, at: CGPoint(x: ss / 2, y: cursorY), anchor: .center)
                             cursorY += ss * 0.055
                         }
-                        var cells: [(String, String)] = []
-                        if face.showSteps { cells.append((fmtSteps(steps), "步数")) }
-                        if face.showHr { cells.append((hr > 0 ? "\(hr)" : "--", "心率")) }
-                        if face.showBattery { cells.append(("\(battery)%", "电量")) }
+                        let cells = slotCells(short: false)
                         if !cells.isEmpty {
                             let colW = ss / CGFloat(cells.count + 1)
                             let y = cursorY + ss * 0.072
@@ -243,6 +248,24 @@ struct MiFacePreview: View {
     private func fmtSteps(_ v: Int) -> String {
         v >= 10000 ? String(format: "%.1f万", Double(v) / 10000) : "\(v)"
     }
+
+    /// 按「复杂功能位」生成数据项，顺序即配置顺序，none 跳过
+    private func slotCells(short: Bool) -> [(String, String)] {
+        let df = DateFormatter()
+        df.dateFormat = "MM月dd日"
+        let dateText = df.string(from: Date())
+        var out: [(String, String)] = []
+        for k in face.slots.prefix(3) {
+            switch k {
+            case "steps": out.append((fmtSteps(steps), short ? "步" : "步数"))
+            case "hr": out.append((hr > 0 ? "\(hr)" : "--", "心率"))
+            case "battery": out.append(("\(battery)%", "电量"))
+            case "date": out.append((dateText, "日期"))
+            default: break
+            }
+        }
+        return out
+    }
 }
 
 // MARK: - 编辑页
@@ -262,6 +285,7 @@ struct MiCustomFaceView: View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: MiSpace.md) {
                 previewCard
+                presetCard
                 layoutCard
                 colorCard
                 elementCard
@@ -382,51 +406,124 @@ struct MiCustomFaceView: View {
         }
     }
 
-    private var elementCard: some View {
+    // 样式预设：一键套用整套配置（对应官方的 StyleOption 预设）
+    private var presetCard: some View {
         MiPanel {
-            MiSectionTitle(text: "显示元素")
-            elementRow("秒数", "showSeconds")
-            MiDivider()
-            elementRow("日期", "showDate")
-            MiDivider()
-            elementRow("步数", "showSteps")
-            MiDivider()
-            elementRow("心率", "showHr")
-            MiDivider()
-            elementRow("电量", "showBattery")
-            MiDivider()
-            elementRow("进度环", "showRing")
+            MiSectionTitle(text: "样式预设")
+            HStack(spacing: MiSpace.sm) {
+                ForEach(presets, id: \.0) { item in
+                    MiChip(title: item.0, selected: store.face == item.1) {
+                        store.face = item.1
+                        store.pushDebounced()
+                    }
+                }
+                Spacer()
+            }
+            Text("预设只是把下面所有选项一次性填好，套用后仍可单独微调")
+                .font(.miMicro).foregroundColor(MiTheme.textTertiary)
         }
     }
 
-    private func elementRow(_ title: String, _ key: String) -> some View {
-        Toggle(isOn: Binding(
-            get: {
-                switch key {
-                case "showSeconds": return store.face.showSeconds
-                case "showDate": return store.face.showDate
-                case "showSteps": return store.face.showSteps
-                case "showHr": return store.face.showHr
-                case "showBattery": return store.face.showBattery
-                default: return store.face.showRing
+    private var presets: [(String, MiFace)] {
+        var sport = MiFace()
+        sport.layout = "data"; sport.accent = "#FF6A00"
+        sport.slots = ["steps", "hr", "battery"]; sport.showRing = true
+
+        var biz = MiFace()
+        biz.layout = "classic"; biz.accent = "#FFFFFF"
+        biz.bg = "#000000"; biz.bg2 = "#000000"; biz.gradient = false
+        biz.slots = ["steps", "battery", "none"]; biz.showRing = false
+        biz.showSteps = true; biz.showHr = false; biz.showBattery = true
+
+        var mini = MiFace()
+        mini.layout = "minimal"; mini.accent = "#00C48C"
+        mini.slots = ["steps", "none", "none"]; mini.showRing = false
+        mini.showSteps = true; mini.showHr = false; mini.showBattery = false
+
+        var night = MiFace()
+        night.layout = "classic"; night.accent = "#2E7BFF"
+        night.bg = "#0A1020"; night.bg2 = "#101C33"
+        night.slots = ["steps", "hr", "battery"]; night.showRing = true
+
+        return [("运动", sport), ("商务", biz), ("极简", mini), ("夜间", night)]
+    }
+
+    private let slotOptions: [(String, String)] = [
+        ("steps", "步数"), ("hr", "心率"), ("battery", "电量"),
+        ("date", "日期"), ("none", "不显示"),
+    ]
+
+    private func slotLabel(_ key: String) -> String {
+        slotOptions.first(where: { $0.0 == key })?.1 ?? "不显示"
+    }
+
+    private func slotAt(_ i: Int) -> String {
+        i < store.face.slots.count ? store.face.slots[i] : "none"
+    }
+
+    private func setSlot(_ i: Int, _ key: String) {
+        var arr = store.face.slots
+        while arr.count < 3 { arr.append("none") }
+        if arr.count > 3 { arr = Array(arr.prefix(3)) }
+        arr[i] = key
+        store.face.slots = arr
+        store.pushDebounced()
+    }
+
+    private func slotRow(_ i: Int) -> some View {
+        HStack {
+            Text("位置 \(i + 1)").font(.miBody).foregroundColor(MiTheme.text)
+            Spacer()
+            Menu {
+                ForEach(slotOptions, id: \.0) { opt in
+                    Button(opt.1) { setSlot(i, opt.0) }
                 }
-            },
-            set: { v in
-                switch key {
-                case "showSeconds": store.face.showSeconds = v
-                case "showDate": store.face.showDate = v
-                case "showSteps": store.face.showSteps = v
-                case "showHr": store.face.showHr = v
-                case "showBattery": store.face.showBattery = v
-                default: store.face.showRing = v
+            } label: {
+                HStack(spacing: 4) {
+                    Text(slotLabel(slotAt(i)))
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(MiTheme.orange)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.system(size: 9))
+                        .foregroundColor(MiTheme.textTertiary)
                 }
-                store.pushDebounced()
+                .padding(.horizontal, 12)
+                .frame(height: 30)
+                .background(Capsule().fill(MiTheme.accentSoft))
             }
-        )) {
-            Text(title).font(.miBody).foregroundColor(MiTheme.text)
         }
-        .tint(MiTheme.orange)
         .padding(.vertical, 2)
+    }
+
+    // 复杂功能位（对齐官方 ComplicationSlot）
+    private var elementCard: some View {
+        MiPanel {
+            MiSectionTitle(text: "复杂功能位")
+            slotRow(0)
+            MiDivider()
+            slotRow(1)
+            MiDivider()
+            slotRow(2)
+            MiDivider()
+            Toggle(isOn: Binding(
+                get: { store.face.showRing },
+                set: { store.face.showRing = $0; store.pushDebounced() }
+            )) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("步数进度环").font(.miBody).foregroundColor(MiTheme.text)
+                    Text("围绕表盘边缘按步数目标填充").font(.miMicro).foregroundColor(MiTheme.textTertiary)
+                }
+            }
+            .tint(MiTheme.orange)
+            MiDivider()
+            Toggle(isOn: Binding(
+                get: { store.face.showDate },
+                set: { store.face.showDate = $0; store.pushDebounced() }
+            )) {
+                Text("显示日期").font(.miBody).foregroundColor(MiTheme.text)
+            }
+            .tint(MiTheme.orange)
+        }
     }
 
     private var typeCard: some View {
