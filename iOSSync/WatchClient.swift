@@ -85,6 +85,23 @@ final class WatchClient {
         }.resume()
     }
 
+    /// 下发配置：手表测量间隔（分钟，0=仅手动测量）
+    func pushConfig(measureIntervalMin: Int, completion: @escaping (Bool) -> Void) {
+        guard let url = URL(string: baseURL + "/config") else {
+            DispatchQueue.main.async { completion(false) }
+            return
+        }
+        var req = URLRequest(url: url, timeoutInterval: 6)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["measure_interval_min": measureIntervalMin])
+        URLSession.shared.dataTask(with: req) { _, resp, _ in
+            DispatchQueue.main.async {
+                completion((resp as? HTTPURLResponse)?.statusCode == 200)
+            }
+        }.resume()
+    }
+
     /// 测试连通性
     func ping(completion: @escaping (Bool) -> Void) {
         guard let url = URL(string: baseURL + "/ping") else {

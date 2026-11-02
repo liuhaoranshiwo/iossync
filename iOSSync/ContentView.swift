@@ -86,6 +86,7 @@ struct ContentView: View {
     @State private var watchSteps = 0
     @State private var sensorsOnline = false
     @State private var sensorTimer: Timer?
+    @State private var measureInterval = 5
     @State private var msgDraft = ""
 
     private let cardGradient = LinearGradient(
@@ -105,6 +106,7 @@ struct ContentView: View {
                     VStack(spacing: 16) {
                         header
                         watchHealthSection
+                        settingsSection
                         pushSection
                         statusCard
                         syncButton
@@ -267,6 +269,47 @@ struct ContentView: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(Color.white.opacity(0.14))
+                    .clipShape(Capsule())
+            }
+        }
+    }
+
+    /// 测量间隔设置区（下行配置到手表）
+    private var settingsSection: some View {
+        SectionCard {
+            HStack(spacing: 10) {
+                MetricBadge(icon: "timer", colors: Palette.loc)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("测量间隔")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(.white)
+                    Text("心率/血氧/体温自动测量周期")
+                        .font(.caption2)
+                        .foregroundColor(.white.opacity(0.45))
+                }
+                Spacer()
+                Picker("", selection: $measureInterval) {
+                    Text("1分").tag(1)
+                    Text("5分").tag(5)
+                    Text("10分").tag(10)
+                    Text("30分").tag(30)
+                    Text("手动").tag(0)
+                }
+                .pickerStyle(.menu)
+                .accentColor(.white)
+            }
+            Button {
+                status = "下发设置…"
+                client.pushConfig(measureIntervalMin: measureInterval) { ok in
+                    status = ok ? "已设置：\(measureInterval == 0 ? "仅手动" : "每 \(measureInterval) 分钟测量")" : "设置失败（手表不在线？）"
+                }
+            } label: {
+                Text("应用到手表")
+                    .font(.caption.bold())
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 9)
+                    .background(cardGradient)
                     .clipShape(Capsule())
             }
         }
