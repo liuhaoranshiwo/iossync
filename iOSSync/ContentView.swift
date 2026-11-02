@@ -71,7 +71,6 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showAddr) {
                 addrSheet
-                    .presentationDetents([.medium])
             }
         }
         .onAppear {
