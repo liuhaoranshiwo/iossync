@@ -262,7 +262,7 @@ struct MiDeviceView: View {
 
     private var functionList: some View {
         VStack(spacing: 0) {
-            rowLink(icon: "square.grid.2x2.fill", color: MiTheme.orange, title: "表盘市场", dest: AnyView(MiWatchfaceView()))
+            rowLink(icon: "square.grid.2x2.fill", color: MiTheme.orange, title: "表盘市场", dest: AnyView(MiWatchfaceRealView()))
             Divider().padding(.leading, 52)
             rowLink(icon: "bell.badge.fill", color: .red, title: "消息通知", dest: AnyView(MiNotifyView()))
             Divider().padding(.leading, 52)
