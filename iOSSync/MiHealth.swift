@@ -68,6 +68,26 @@ final class MiHealth {
         return Data(mac).base64EncodedString()
     }
 
+    // MARK: - 绑定设备（取市场型号用于表盘过滤）
+
+    func fetchBoundDevices(completion: @escaping ([(model: String, name: String)]) -> Void) {
+        signedGet(path: "user/get_bound_devices", params: [:]) { j in
+            guard let j = j else { completion([]); return }
+            let arr = (j["data"] as? [String: Any])?["devices"] as? [[String: Any]]
+                ?? j["data"] as? [[String: Any]] ?? []
+            let list = arr.compactMap { d -> (String, String)? in
+                let m = d["model"] as? String ?? d["device_model"] as? String ?? ""
+                let n = d["name"] as? String ?? d["device_name"] as? String ?? m
+                return m.isEmpty ? nil : (m, n)
+            }
+            if let first = list.first {
+                UserDefaults.standard.set(first.0, forKey: "mi_device_model")
+                UserDefaults.standard.set(first.1, forKey: "mi_device_name")
+            }
+            completion(list)
+        }
+    }
+
     // MARK: - 运动记录
 
     func fetchSportRecords(days: Int = 7, completion: @escaping ([Record]) -> Void) {

@@ -23,7 +23,11 @@ final class MiWatchfaceStore: ObservableObject {
     func load() {
         guard tabs.isEmpty, !loading else { return }
         loading = true
-        let urlStr = host + "/api/watchface/prize/tabs?locale=zh_CN"
+        let model = UserDefaults.standard.string(forKey: "mi_device_model") ?? ""
+        var urlStr = host + "/api/watchface/prize/tabs?locale=zh_CN"
+        if !model.isEmpty {
+            urlStr += "&model=" + (model.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? model)
+        }
         guard let url = URL(string: urlStr) else { loading = false; return }
         URLSession.shared.dataTask(with: url) { data, _, e in
             DispatchQueue.main.async {
