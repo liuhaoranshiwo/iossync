@@ -67,13 +67,41 @@ final class MiCloud {
                     }.resume()
                 } else {
                     self?.persist()
-                    // 把服务器原始响应暴露出来用于定位（含 securityStatus/notificationUrl 等）
-                    let raw = String(data: d2, encoding: .utf8) ?? ""
-                    let body = raw.replacingOccurrences(of: "&&&START&&&", with: "")
-                    DispatchQueue.main.async {
-                        completion("无location。服务器原始响应：\n" + String(body.prefix(500)))
+                    if let nurl = j2["notificationUrl"] as? String, !nurl.isEmpty {
+                        DispatchQueue.main.async { completion("VERIFY|" + nurl) }
+                    } else {
+                        let body = (String(data: d2, encoding: .utf8) ?? "")
+                            .replacingOccurrences(of: "&&&START&&&", with: "")
+                        DispatchQueue.main.async {
+                            completion("无location。服务器原始响应：\n" + String(body.prefix(400)))
+                        }
                     }
                 }
+            }.resume()
+        }.resume()
+    }
+
+    /// 身份验证后：用 ticket 换 serviceToken
+    func exchangeTicket(_ ticket: String, completion: @escaping (Bool, String) -> Void) {
+        let sid = "xiaomiio"
+        let urlStr = "https://account.xiaomi.com/pass/serviceLogin?ticket=\(ticket)&sid=\(sid)&_json=true"
+        guard let url = URL(string: urlStr) else { completion(false, "票据无效"); return }
+        URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
+            guard let d = data, let j = Self.parseJson(d) else {
+                completion(false, "ticket 交换失败"); return
+            }
+            self?.userId = j["userId"] as? String ?? ""
+            self?.ssecurity = j["ssecurity"] as? String ?? ""
+            guard let loc = j["location"] as? String, let u2 = URL(string: loc) else {
+                completion(false, "无 location：\(String((String(data: d, encoding: .utf8) ?? "").prefix(160)))")
+                return
+            }
+            URLSession.shared.dataTask(with: u2) { [weak self] _, _, _ in
+                let tok = HTTPCookieStorage.shared.cookies?
+                    .filter { $0.name == "serviceToken" }.compactMap { $0.value }.first ?? ""
+                self?.serviceToken = tok
+                self?.persist()
+                DispatchQueue.main.async { completion(!tok.isEmpty, tok.isEmpty ? "未取得 serviceToken" : "登录成功") }
             }.resume()
         }.resume()
     }

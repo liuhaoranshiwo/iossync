@@ -91,6 +91,8 @@ struct MiLoginView: View {
     @State private var agreed = false
     @State private var err = ""
     @State private var showSmsInfo = false
+    @State private var showVerify = false
+    @State private var verifyUrl = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -167,6 +169,7 @@ struct MiLoginView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(MiTheme.bg.ignoresSafeArea())
+        .sheet(isPresented: $showVerify) { MiVerifyView(verifyUrl: verifyUrl) }
     }
 
     private func doLogin() {
@@ -175,6 +178,12 @@ struct MiLoginView: View {
         err = "登录中…"
         MiCloud.shared.login(user: phone, password: password) { msg in
             DispatchQueue.main.async {
+                if msg.hasPrefix("VERIFY|") {
+                    self.verifyUrl = String(msg.dropFirst(7))
+                    self.showVerify = true
+                    self.err = "需要身份验证：请完成短信确认"
+                    return
+                }
                 self.err = msg
                 if MiCloud.shared.isLoggedIn {
                     // 会话状态变更会自动关闭登录页（根视图 onChange）
