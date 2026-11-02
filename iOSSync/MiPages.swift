@@ -180,6 +180,15 @@ struct MiSleepView: View {
 // MARK: - 运动 Tab
 
 struct MiSportView: View {
+    @State private var records: [MiHealth.Record] = []
+    @State private var recErr = ""
+
+    private func loadRecords() {
+        MiHealth.shared.fetchSportRecords { recs in
+            records = recs
+            recErr = recs.isEmpty ? (MiHealth.shared.lastError.isEmpty ? "" : "拉取失败：" + MiHealth.shared.lastError) : ""
+        }
+    }
     private let sports: [(String, String, Color)] = [
         ("outdoor.run", "户外跑", .green), ("indoor.run", "室内跑", .orange),
         ("bicycle", "骑行", .blue), ("figure.pool.swim", "游泳", .cyan),
@@ -203,10 +212,32 @@ struct MiSportView: View {
                     }
                 }
                 MiCard {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("运动记录").font(.subheadline.weight(.semibold)).foregroundColor(MiTheme.text)
-                        Text("暂无运动记录").font(.caption).foregroundColor(MiTheme.subText)
-                        Text("在手表上开始运动后，记录将同步到这里").font(.caption2).foregroundColor(MiTheme.subText)
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("运动记录").font(.subheadline.weight(.semibold)).foregroundColor(MiTheme.text)
+                            Spacer()
+                            Button {
+                                loadRecords()
+                            } label: {
+                                Text("刷新").font(.caption).foregroundColor(MiTheme.orange)
+                            }
+                        }
+                        if records.isEmpty {
+                            Text(recErr.isEmpty ? "暂无运动记录（在手表开始运动后同步）" : recErr)
+                                .font(.caption2).foregroundColor(MiTheme.subText)
+                        } else {
+                            ForEach(records) { r in
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(r.title).font(.caption.bold()).foregroundColor(MiTheme.text)
+                                        Text(r.subtitle).font(.system(size: 10)).foregroundColor(MiTheme.subText)
+                                    }
+                                    Spacer()
+                                    Text(r.value).font(.caption).foregroundColor(MiTheme.orange)
+                                }
+                                Divider()
+                            }
+                        }
                     }
                 }
             }
@@ -215,6 +246,7 @@ struct MiSportView: View {
         }
         .background(MiTheme.bg.ignoresSafeArea())
         .navigationBarHidden(true)
+        .onAppear { loadRecords() }
     }
 }
 
