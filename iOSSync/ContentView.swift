@@ -88,6 +88,7 @@ struct ContentView: View {
     @State private var sensorTimer: Timer?
     @State private var measureInterval = 5
     @State private var msgDraft = ""
+    @State private var tab = 0
 
     private let cardGradient = LinearGradient(
         colors: [Color(red: 0.23, green: 0.51, blue: 0.96), Color(red: 0.49, green: 0.31, blue: 0.96)],
@@ -102,21 +103,34 @@ struct ContentView: View {
         NavigationView {
             ZStack {
                 bgGradient.ignoresSafeArea()
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 16) {
-                        header
-                        watchHealthSection
-                        settingsSection
-                        pushSection
-                        statusCard
-                        syncButton
-                        bleButton
-                        footer
+                TabView(selection: $tab) {
+                    ScrollView(showsIndicators: false) {
+                        VStack(spacing: 16) {
+                            header
+                            watchHealthSection
+                            settingsSection
+                            pushSection
+                            statusCard
+                            syncButton
+                            bleButton
+                            footer
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 8)
+                        .padding(.bottom, 24)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 8)
-                    .padding(.bottom, 24)
+                    .tabItem { Label("健康", systemImage: "heart.fill") }
+                    .tag(0)
+
+                    DeviceTabView(bg: bgGradient)
+                        .tabItem { Label("设备", systemImage: "applewatch") }
+                        .tag(1)
+
+                    ProfileTabView()
+                        .tabItem { Label("我的", systemImage: "person.fill") }
+                        .tag(2)
                 }
+                .tint(.white)
             }
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
@@ -495,5 +509,171 @@ struct ContentView: View {
                 }
             }
         }
+    }
+}
+
+/// 设备 Tab：连接管理（复刻 Mi Fitness「设备」页核心）
+struct DeviceTabView: View {
+    var bg: LinearGradient
+    @State private var addr = WatchClient.shared.baseURL
+    @State private var pingOK: Bool?
+    @State private var testing = false
+
+    var body: some View {
+        ZStack {
+            bg.ignoresSafeArea()
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 14) {
+                    deviceHeader
+                    addressCard
+                    pingCard
+                    connectInfoCard
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .padding(.bottom, 90)
+            }
+        }
+    }
+
+    private var deviceHeader: some View {
+        VStack(spacing: 6) {
+            Image(systemName: "applewatch")
+                .font(.system(size: 42))
+                .foregroundColor(.white.opacity(0.9))
+            Text("小米手表 2 Pro")
+                .font(.headline)
+                .foregroundColor(.white)
+            Text(pingOK == true ? "已连接" : (pingOK == false ? "未连接" : "检查中…"))
+                .font(.caption)
+                .foregroundColor(pingOK == true ? Color.green : .white.opacity(0.55))
+        }
+        .padding(.top, 20)
+    }
+
+    private var addressCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("手表地址").font(.caption).foregroundColor(.white.opacity(0.5))
+            TextField("http://192.168.2.76:8787", text: $addr)
+                .textFieldStyle(.plain)
+                .font(.system(.footnote, design: .monospaced))
+                .foregroundColor(.white)
+                .autocapitalization(.none)
+                .disableAutocorrection(true)
+                .padding(10)
+                .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.08)))
+            Button {
+                WatchClient.shared.baseURL = addr
+                testPing()
+            } label: {
+                Text("保存地址")
+                    .font(.caption.bold()).foregroundColor(.white)
+                    .frame(maxWidth: .infinity).padding(.vertical, 9)
+                    .background(
+                        LinearGradient(colors: [Color(red: 0.23, green: 0.51, blue: 0.96),
+                                               Color(red: 0.49, green: 0.31, blue: 0.96)],
+                                       startPoint: .leading, endPoint: .trailing)
+                    )
+                    .clipShape(Capsule())
+            }
+        }
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 20).fill(Color.white.opacity(0.06)))
+    }
+
+    private var pingCard: some View {
+        Button {
+            testPing()
+        } label: {
+            HStack {
+                Image(systemName: testing ? "hourglass" : "bolt.fill")
+                Text(testing ? "测试中…" : (pingOK == true ? "连接正常（点此重测）" : "测试连接"))
+            }
+            .font(.subheadline.weight(.semibold))
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(RoundedRectangle(cornerRadius: 14).fill(Color.white.opacity(0.08)))
+        }
+    }
+
+    private var connectInfoCard: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("连接方式").font(.caption.bold()).foregroundColor(.white.opacity(0.6))
+            infoRow(icon: "wifi", text: "Wi-Fi：手表与手机同一局域网，端口 8787")
+            infoRow(icon: "antenna.radiowaves.left.and.right", text: "蓝牙：手表熄屏仍保持广播，自动重连")
+            infoRow(icon: "waveform.path.ecg", text: "健康数据：手表测量后自动同步到本页")
+        }
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 20).fill(Color.white.opacity(0.06)))
+    }
+
+    private func infoRow(icon: String, text: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: icon).font(.caption).foregroundColor(.white.opacity(0.55)).frame(width: 16)
+            Text(text).font(.caption).foregroundColor(.white.opacity(0.75))
+        }
+    }
+
+    private func testPing() {
+        testing = true
+        WatchClient.shared.ping { ok in
+            pingOK = ok
+            testing = false
+        }
+    }
+}
+
+/// 我的 Tab：应用信息与功能清单（复刻 Mi Fitness「我的」页）
+struct ProfileTabView: View {
+    var body: some View {
+        ZStack {
+            LinearGradient(colors: [Color(red: 0.07, green: 0.09, blue: 0.22),
+                                    Color(red: 0.05, green: 0.06, blue: 0.16)],
+                           startPoint: .top, endPoint: .bottom)
+                .ignoresSafeArea()
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 14) {
+                    Image(systemName: "applewatch.radiowaves.left.and.right")
+                        .font(.system(size: 40))
+                        .foregroundColor(.white.opacity(0.9))
+                    Text("iOSSync").font(.title3.bold()).foregroundColor(.white)
+                    Text("v1.5 · 复刻小米运动健康")
+                        .font(.caption).foregroundColor(.white.opacity(0.5))
+                    featureCard(title: "已实现", items: [
+                        "手表健康上行（心率/血氧/体温/海拔/步数）",
+                        "消息推送手表系统通知（震动提醒）",
+                        "测量间隔远程设置",
+                        "手机定位/天气下行",
+                        "Wi-Fi + 蓝牙双通道连接",
+                    ])
+                    featureCard(title: "iOS 系统限制", items: [
+                        "第三方 App 通知不可读取（微信等）",
+                        "短信/来电可用快捷指令自动化转发",
+                        "小米云健康同步需账号登录（规划中）",
+                    ])
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
+                .padding(.bottom, 90)
+            }
+        }
+    }
+
+    private func featureCard(title: String, items: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.caption.bold()).foregroundColor(.white.opacity(0.6))
+            ForEach(items, id: \.self) { it in
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.caption2)
+                        .foregroundColor(.green.opacity(0.8))
+                    Text(it).font(.caption).foregroundColor(.white.opacity(0.8))
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 20).fill(Color.white.opacity(0.06)))
     }
 }
