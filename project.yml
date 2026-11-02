@@ -1,0 +1,44 @@
+name: iOSSync
+options:
+  bundleIdPrefix: com.iossync
+  deploymentTarget:
+    iOS: "15.0"
+  createIntermediateGroups: true
+
+targets:
+  iOSSync:
+    type: application
+    platform: iOS
+    sources:
+      - path: iOSSync
+    dependencies:
+      - sdk: HealthKit.framework
+      - sdk: CoreLocation.framework
+    info:
+      path: iOSSync/Info.plist
+      properties:
+        CFBundleDisplayName: iOSSync
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "1"
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        NSHealthShareUsageDescription: 读取步数与心率，用于同步到小米手表。
+        NSLocationWhenInUseUsageDescription: 获取当前位置，用于刷新手表上的天气。
+        NSLocalNetworkUsageDescription: 连接同一 Wi-Fi 下的手表（192.168.x.x）同步数据。
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+    entitlements:
+      path: iOSSync/iOSSync.entitlements
+      properties:
+        com.apple.developer.healthkit: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.iossync.app
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: ""
+        CODE_SIGNING_REQUIRED: "NO"
+        DEVELOPMENT_TEAM: ""
+        ENABLE_BITCODE: "NO"
+        SWIFT_VERSION: "5.9"
+        TARGETED_DEVICE_FAMILY: "1"
