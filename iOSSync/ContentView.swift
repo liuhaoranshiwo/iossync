@@ -25,6 +25,9 @@ struct ContentView: View {
         .onAppear {
             showLogin = !session.isLoggedIn
             MiSensorStore.shared.startPolling()
+            if !MiCloud.shared.serviceToken.isEmpty {
+                MiHealth.shared.fetchBoundDevices { _ in }
+            }
         }
         .onChange(of: session.isLoggedIn) { logged in
             showLogin = !logged
