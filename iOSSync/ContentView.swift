@@ -223,7 +223,7 @@ struct ContentView: View {
                 syncing = true
                 status = "推送定位…"
                 location.locate { lat, lon, name in
-                    client.sync(steps: Int(health.steps), heartRate: Int(health.heartRate),
+                    client.sync(steps: health.steps, heartRate: health.heartRate,
                                 lat: lat, lon: lon, name: name) { msg in
                         status = "定位: " + msg
                         syncing = false
