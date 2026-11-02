@@ -940,7 +940,7 @@ struct MiProfileView: View {
     private var appVersion: String {
         let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
         let b = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
-        return "iOSSync v\(v) (\(b))  ·  表盘=本机42表盘"
+        return "iOSSync v\(v) (\(b))  ·  42 个本机表盘（真实预览）"
     }
 
     var body: some View {
