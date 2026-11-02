@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @ObservedObject private var health = HealthReader.shared
     @ObservedObject private var location = LocationReader.shared
+    @ObservedObject private var ble = BleSync.shared
     private let client = WatchClient.shared
 
     @State private var status = "点下方按钮开始同步"
@@ -38,6 +39,19 @@ struct ContentView: View {
                         .padding(.vertical, 14)
                     }
                     .buttonStyle(.borderedProminent)
+                    .disabled(syncing)
+
+                    Button(action: doBleSync) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "wave.3.right.circle")
+                            Text("蓝牙直连同步")
+                            if ble.connected { Text("（已连接）") }
+                        }
+                        .font(.subheadline.bold())
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                    }
+                    .buttonStyle(.bordered)
                     .disabled(syncing)
 
                     HStack {
@@ -152,22 +166,50 @@ struct ContentView: View {
 
     // MARK: - 同步流程
 
+    /// 采集健康 + 定位数据
+    private func collectData(_ completion: @escaping (Double, Double, Double, Double, String) -> Void) {
+        health.requestAuth { _ in
+            health.fetchAll {
+                location.locate { lat, lon, name in
+                    completion(health.steps, health.heartRate, lat, lon, name)
+                }
+            }
+        }
+    }
+
+    private func payload(steps: Double, hr: Double, lat: Double, lon: Double, name: String) -> [String: Any] {
+        [
+            "steps": Int(steps),
+            "heart_rate": Int(hr),
+            "latitude": lat,
+            "longitude": lon,
+            "name": name,
+            "epoch_ms": Int64(Date().timeIntervalSince1970 * 1000),
+        ]
+    }
+
     private func doSync() {
         syncing = true
         status = "读取健康数据…"
-        health.requestAuth { _ in
-            health.fetchAll {
-                status = "获取定位…"
-                location.locate { lat, lon, name in
-                    status = "推送到手表…"
-                    client.sync(steps: health.steps,
-                                heartRate: health.heartRate,
-                                lat: lat, lon: lon, name: name) { msg in
-                        status = msg
-                        syncing = false
-                        lastSync = Date()
-                    }
-                }
+        collectData { steps, hr, lat, lon, name in
+            status = "推送到手表（Wi-Fi）…"
+            client.sync(steps: steps, heartRate: hr, lat: lat, lon: lon, name: name) { msg in
+                status = msg
+                syncing = false
+                lastSync = Date()
+            }
+        }
+    }
+
+    private func doBleSync() {
+        syncing = true
+        status = "读取健康数据…"
+        collectData { steps, hr, lat, lon, name in
+            status = "蓝牙发送中…"
+            ble.send(json: payload(steps: steps, hr: hr, lat: lat, lon: lon, name: name)) { msg in
+                status = msg
+                syncing = false
+                lastSync = Date()
             }
         }
     }
