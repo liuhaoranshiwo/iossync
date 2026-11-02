@@ -60,7 +60,7 @@ final class MiWatchfaceStore: ObservableObject {
         WatchClient.shared.openWatchfaceChooser { ok in done(ok) }
     }
 
-    /// 切到指定表盘
+    /// 切到指定表盘：把系统表盘确认页直接拉到前台（确认页里点「设为表盘」生效）
     func apply(_ face: Face, done: @escaping (Bool, String) -> Void) {
         busy = true
         WatchClient.shared.applyWatchface(pkg: face.pkg, index: face.id) { ok in
@@ -119,7 +119,7 @@ struct MiWatchfaceRealView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("关于表盘来源").font(.subheadline.weight(.semibold))
                             .foregroundColor(MiTheme.text)
-                        Text("这 \(store.faces.count) 个表盘是手表系统里真实安装的（MiWatchFace.apk），预览图直接从各表盘服务的官方 preview 资源读取，不是网图也不是模拟图。Watch 2 Pro 是 Wear OS 设备，小米在线表盘商店只服务 Watch S 系列/手环，所以这里不接商店，接的是本机真实表盘。")
+                        Text("这 \(store.faces.count) 个表盘是手表系统里真实安装的（MiWatchFace.apk），预览图直接从各表盘服务的官方 preview 资源读取。点任一表盘会让手表直接弹出系统表盘确认页。Wear OS 不允许第三方 App 静默改表盘（setWallpaperComponent 是隐藏 API + 系统签名权限），所以最后一步「设为表盘」要在手表上点。")
                             .font(.system(size: 10)).foregroundColor(MiTheme.subText)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -195,7 +195,7 @@ struct MiWatchfaceRealView: View {
             store.apply(f) { ok, name in
                 toastOK = ok
                 toast = ok
-                    ? "已发送切换指令「\(name)」，在手表上点确认即生效"
+                    ? "手表已弹出「\(name)」的表盘确认页，点「设为表盘」生效"
                     : "切换失败：手表未连接"
             }
         } label: {

@@ -19,8 +19,8 @@ targets:
       path: iOSSync/Info.plist
       properties:
         CFBundleDisplayName: iOSSync
-        CFBundleShortVersionString: "3.0"
-        CFBundleVersion: "22"
+        CFBundleShortVersionString: "3.1"
+        CFBundleVersion: "23"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:

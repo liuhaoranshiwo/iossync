@@ -187,6 +187,7 @@ struct MiSportView: View {
     @State private var sportType = "running"
     @State private var metrics: [String: Any] = [:]
     @State private var sportStatus = ""
+    @State private var nativeMode = false
     @State private var timer: Timer?
 
     private func loadRecords() {
@@ -223,7 +224,14 @@ struct MiSportView: View {
         WatchClient.shared.sportAction("start", type: sportType) { j in
             if let j = j, j["ok"] as? Bool == true, j["started"] as? Bool == true {
                 exercising = true
-                sportStatus = "✓ 手表运动进行中（\(sportName(sportType))），再点一次该图标结束"
+                nativeMode = j["native"] as? Bool ?? false
+                if let hint = j["hint"] as? String, !hint.isEmpty {
+                    sportStatus = "✓ " + hint
+                } else {
+                    sportStatus = nativeMode
+                        ? "✓ 手表已打开原生「\(sportName(sportType))」"
+                        : "✓ 手表运动进行中（\(sportName(sportType))），再点一次该图标结束"
+                }
                 startPolling()
             } else {
                 sportStatus = "启动失败：" + ((j?["msg"] as? String) ?? "手表未连接（检查同一 Wi-Fi）")
@@ -241,10 +249,12 @@ struct MiSportView: View {
             timer?.invalidate()
             if let j = j, j["ok"] as? Bool == true {
                 metrics = j["metrics"] as? [String: Any] ?? [:]
-                sportStatus = "已结束，运动数据已记录在手表"
+                let hint = j["hint"] as? String ?? "已结束"
+                sportStatus = (j["native"] as? Bool ?? false) ? "已收尾：" + hint : "已结束，运动数据已记录在手表"
             } else {
                 sportStatus = "停止失败：" + ((j?["msg"] as? String) ?? "")
             }
+            nativeMode = false
             loadRecords()
         }
     }
@@ -292,12 +302,12 @@ struct MiSportView: View {
                                 .font(.caption2).foregroundColor(MiTheme.orange)
                         }
                         HStack(spacing: 0) {
-                            metricCell(value: "\(Int(metrics["heart_rate"] as? Double ?? 0))",
+                            metricCell(value: nativeMode ? "手表端" : "\(Int(metrics["heart_rate"] as? Double ?? 0))",
                                        label: "心率 bpm")
-                            metricCell(value: "\(metrics["steps"] as? Int ?? 0)", label: "步数")
-                            metricCell(value: fmtDist(), label: "距离")
+                            metricCell(value: nativeMode ? "手表端" : "\(metrics["steps"] as? Int ?? 0)", label: "步数")
+                            metricCell(value: nativeMode ? "手表端" : fmtDist(), label: "距离")
                             metricCell(value: "\(metrics["duration_s"] as? Int ?? 0)s", label: "时长")
-                            metricCell(value: String(format: "%.1f", metrics["calories"] as? Double ?? 0),
+                            metricCell(value: nativeMode ? "手表端" : String(format: "%.1f", metrics["calories"] as? Double ?? 0),
                                        label: "千卡")
                         }
                         HStack(spacing: 10) {
