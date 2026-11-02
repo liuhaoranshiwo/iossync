@@ -24,6 +24,9 @@ struct MiHomeView: View {
                         Image(systemName: "bell").foregroundColor(MiTheme.text)
                     }
                 }
+                if !store.online {
+                    offlineHint
+                }
                 stepCard
                 metricGrid
                 weatherCard
@@ -38,6 +41,26 @@ struct MiHomeView: View {
             store.startPolling(); now = Date()
             health.requestAuth { _ in health.fetchAll {} }
         }
+    }
+
+    // 手表离线诊断横幅
+    private var offlineHint: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.orange)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("手表未连接").font(.caption.bold()).foregroundColor(MiTheme.text)
+                Text("确认手表 iOSSync 已打开、与手机同一 Wi-Fi；若仍不行，卸载重装一次本应用让系统重建网络权限")
+                    .font(.caption2).foregroundColor(MiTheme.subText)
+            }
+            Spacer()
+            Button {
+                store.refresh()
+            } label: {
+                Text("重试").font(.caption.bold()).foregroundColor(MiTheme.orange)
+            }
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.orange.opacity(0.12)))
     }
 
     // 步数大卡（圆环 + 今日步数）
@@ -161,7 +184,7 @@ struct MiSportView: View {
         ("outdoor.run", "户外跑", .green), ("indoor.run", "室内跑", .orange),
         ("bicycle", "骑行", .blue), ("figure.pool.swim", "游泳", .cyan),
         ("dumbbell.fill", "力量训练", .purple), ("leaf.fill", "瑜伽", .pink),
-        ("figure.walk", "健走", .mint), ("rowing.machine", "划船机", .teal),
+        ("figure.walk", "健走", .mint), ("figure.jumprope", "跳绳", .teal),
     ]
 
     var body: some View {
