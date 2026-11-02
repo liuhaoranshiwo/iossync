@@ -172,8 +172,15 @@ struct MiLoginView: View {
     private func doLogin() {
         guard agreed else { err = "请先勾选同意协议"; return }
         guard phone.count >= 5 else { err = "请输入正确的手机号"; return }
-        // 小米云 OAuth 全链路为二期；本期先建立本地会话打通全部设备功能
-        session.login(nick: "", phone: phone)
-        present.wrappedValue.dismiss()
+        err = "登录中…"
+        MiCloud.shared.login(user: phone, password: password) { msg in
+            DispatchQueue.main.async {
+                self.err = msg
+                if MiCloud.shared.isLoggedIn {
+                    // 会话状态变更会自动关闭登录页（根视图 onChange）
+                    self.session.login(nick: "", phone: phone)
+                }
+            }
+        }
     }
 }
