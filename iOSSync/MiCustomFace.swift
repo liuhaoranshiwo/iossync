@@ -249,7 +249,6 @@ struct MiFacePreview: View {
 
 struct MiCustomFaceView: View {
     @ObservedObject var store = MiFaceStore.shared
-    @State private var onWatch = false
 
     private let accents = ["#FF6A00", "#2E7BFF", "#00C48C", "#B36BFF", "#FF4D6D", "#FFFFFF"]
     private let bgs: [(String, String, String)] = [
@@ -472,21 +471,11 @@ struct MiCustomFaceView: View {
 
     private var actionCard: some View {
         VStack(spacing: MiSpace.sm) {
-            MiButton(title: "在手表上实时预览", systemImage: "applewatch", style: .secondary) {
-                WatchClient.shared.openFacePreview { ok in
-                    onWatch = ok
-                }
-            }
-            MiButton(title: "恢复默认样式", style: .ghost) {
+            MiButton(title: "恢复默认样式", style: .secondary) {
                 store.face = MiFace()
                 store.pushDebounced()
             }
-            if onWatch {
-                Text("手表已打开实时预览：改任何一项都会在 1 秒内反映到手表上")
-                    .font(.miMicro).foregroundColor(MiTheme.textTertiary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-            }
-            Text("首次使用：在手表表盘选择器里选一次「自定义表盘」，之后所有调整都在这个页面完成，不用再碰手表。")
+            Text("首次使用：在手表表盘选择器里选一次「自定义表盘」，之后所有调整都在这个页面完成，手表端不再需要任何操作。")
                 .font(.miMicro).foregroundColor(MiTheme.textTertiary)
                 .multilineTextAlignment(.center)
                 .padding(.top, 2)

@@ -282,13 +282,6 @@ final class WatchClient {
         }
     }
 
-    /// 让手表全屏显示实时预览（与表盘同一渲染内核）
-    func openFacePreview(completion: @escaping (Bool) -> Void) {
-        postJSON("/customface/preview", body: [:]) { j in
-            completion(j?["ok"] as? Bool ?? false)
-        }
-    }
-
     // MARK: - 运动记录
 
     func fetchSportRecords(limit: Int = 20, completion: @escaping ([String: Any]?) -> Void) {
