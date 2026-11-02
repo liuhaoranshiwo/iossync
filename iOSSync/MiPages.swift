@@ -937,6 +937,12 @@ struct MiProfileView: View {
     @ObservedObject var session = MiSession.shared
     @State private var showLogin = false
 
+    private var appVersion: String {
+        let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+        let b = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
+        return "iOSSync v\(v) (\(b))  ·  表盘=本机42表盘"
+    }
+
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 14) {
@@ -946,6 +952,12 @@ struct MiProfileView: View {
                     loginPrompt
                 }
                 settingsList
+                // 版本标识：用于确认安装的是哪一版
+                Text(appVersion)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(MiTheme.subText)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, 4)
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
