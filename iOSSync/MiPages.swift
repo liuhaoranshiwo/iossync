@@ -391,8 +391,10 @@ struct MiSyncPanel: View {
     private func doPushLocation() {
         busy = true; status = "定位推送中…"
         location.locate { lat, lon, name in
-            WatchClient.shared.pushMessage("📍 \(name) %.4f,%.4f".format(lat, lon)) { ok in
-                status = ok ? "定位已推送" : "推送失败（检查连接）"; busy = false
+            let city = name.isEmpty ? String(format: "%.2f,%.2f", lat, lon) : name
+            WatchClient.shared.pushLocation(lat: lat, lon: lon, name: city) { ok in
+                status = ok ? "定位已推送：\(city)" : "定位推送失败（手表不在线？）"
+                busy = false
             }
         }
     }

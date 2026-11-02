@@ -85,6 +85,26 @@ final class WatchClient {
         }.resume()
     }
 
+    /// 下发定位（手表据此刷新天气）
+    func pushLocation(lat: Double, lon: Double, name: String,
+                      completion: @escaping (Bool) -> Void) {
+        guard let url = URL(string: baseURL + "/location") else {
+            DispatchQueue.main.async { completion(false) }
+            return
+        }
+        var req = URLRequest(url: url, timeoutInterval: 6)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: [
+            "latitude": lat, "longitude": lon, "name": name,
+        ])
+        URLSession.shared.dataTask(with: req) { _, resp, _ in
+            DispatchQueue.main.async {
+                completion((resp as? HTTPURLResponse)?.statusCode == 200)
+            }
+        }.resume()
+    }
+
     /// 下发配置：手表测量间隔（分钟，0=仅手动测量）
     func pushConfig(measureIntervalMin: Int, completion: @escaping (Bool) -> Void) {
         guard let url = URL(string: baseURL + "/config") else {
