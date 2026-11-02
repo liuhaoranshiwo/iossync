@@ -188,6 +188,7 @@ struct MiSportView: View {
     @State private var metrics: [String: Any] = [:]
     @State private var sportStatus = ""
     @State private var nativeMode = false
+    @State private var overlayOK = true
     @State private var timer: Timer?
 
     private func loadRecords() {
@@ -330,6 +331,11 @@ struct MiSportView: View {
                         if !sportStatus.isEmpty {
                             Text(sportStatus).font(.system(size: 10)).foregroundColor(MiTheme.subText)
                         }
+                        if !overlayOK {
+                            Text("⚠️ 手表缺少「悬浮窗」豁免，点运动不会在手表上弹出界面。请连电脑执行一次：adb shell appops set com.ioswear.sync SYSTEM_ALERT_WINDOW allow")
+                                .font(.system(size: 9)).foregroundColor(.red)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                 }
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
@@ -397,10 +403,12 @@ struct MiSportView: View {
         .navigationBarHidden(true)
         .onAppear {
             loadRecords()
+            WatchClient.shared.overlayStatus { ok in overlayOK = ok }
             // 若手表上已有进行中的运动则恢复显示
             WatchClient.shared.sportSnapshot { j in
                 if let j = j, j["exercising"] as? Bool == true {
                     exercising = true
+                    nativeMode = j["native"] as? Bool ?? false
                     startPolling()
                 }
             }

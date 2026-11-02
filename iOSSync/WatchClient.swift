@@ -207,6 +207,21 @@ final class WatchClient {
         }.resume()
     }
 
+    /// 手表是否拿到「悬浮窗」豁免（Android 14 后台弹界面的必要条件）
+    func overlayStatus(completion: @escaping (Bool) -> Void) {
+        guard let url = URL(string: baseURL + "/overlay") else {
+            DispatchQueue.main.async { completion(false) }; return
+        }
+        URLSession.shared.dataTask(with: URLRequest(url: url, timeoutInterval: 6)) { data, _, _ in
+            var ok = false
+            if let data = data,
+               let j = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                ok = j["allowed"] as? Bool ?? false
+            }
+            DispatchQueue.main.async { completion(ok) }
+        }.resume()
+    }
+
     // MARK: - 本机表盘（手表系统真实枚举 / 切换）
 
     func fetchWatchfaces(completion: @escaping ([String: Any]?) -> Void) {
