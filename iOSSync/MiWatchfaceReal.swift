@@ -74,6 +74,7 @@ struct MiWatchfaceRealView: View {
     @ObservedObject var store = MiWatchfaceStore.shared
     @State private var toast = ""
     @State private var toastOK = true
+    @State private var onCustom = false
 
     private let cols = [GridItem(.flexible(), spacing: 12),
                         GridItem(.flexible(), spacing: 12),
@@ -168,16 +169,21 @@ struct MiWatchfaceRealView: View {
                         .padding(.vertical, 30)
                 }
 
-                Button {
+                MiButton(title: "自定义样式", systemImage: "wand.and.stars", style: .primary) {
+                    onCustom = true
+                }
+                .background(
+                    NavigationLink(destination: MiCustomFaceView(), isActive: $onCustom) {
+                        EmptyView()
+                    }.hidden()
+                )
+
+                MiButton(title: "打开系统表盘选择器", systemImage: "square.grid.2x2",
+                         style: .secondary) {
                     store.openChooser { ok in
                         toastOK = ok
                         toast = ok ? "已在手表上打开表盘选择器，转表冠挑选" : "打开失败：手表未连接"
                     }
-                } label: {
-                    Text("在手表上打开表盘选择器")
-                        .font(.subheadline.bold()).foregroundColor(.white)
-                        .frame(maxWidth: .infinity).padding(.vertical, 12)
-                        .background(RoundedRectangle(cornerRadius: 24).fill(MiTheme.orange))
                 }
             }
             .frame(maxWidth: .infinity)

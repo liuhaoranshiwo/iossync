@@ -313,19 +313,10 @@ struct MiSportView: View {
                         }
                         HStack(spacing: 10) {
                             if exercising {
-                                Button(action: stopWatchSport) {
-                                    Text("结束运动")
-                                        .font(.subheadline.bold()).foregroundColor(.white)
-                                        .frame(maxWidth: .infinity).padding(.vertical, 12)
-                                        .background(RoundedRectangle(cornerRadius: 24).fill(Color.red))
-                                }
+                                MiButton(title: "结束运动", style: .destructive, action: stopWatchSport)
                             } else {
-                                Button(action: startWatchSport) {
-                                    Text("在手表上开始")
-                                        .font(.subheadline.bold()).foregroundColor(.white)
-                                        .frame(maxWidth: .infinity).padding(.vertical, 12)
-                                        .background(RoundedRectangle(cornerRadius: 24).fill(MiTheme.orange))
-                                }
+                                MiButton(title: "在手表上开始", systemImage: "applewatch",
+                                         style: .primary, action: startWatchSport)
                             }
                         }
                         if !sportStatus.isEmpty {
@@ -462,7 +453,11 @@ struct MiDeviceView: View {
         VStack(spacing: 0) {
             rowLink(icon: "square.grid.2x2.fill", color: MiTheme.orange, title: "表盘", dest: AnyView(MiWatchfaceRealView()))
             Divider().padding(.leading, 52)
-            rowLink(icon: "bell.badge.fill", color: .red, title: "消息通知", dest: AnyView(MiNotifyView()))
+            rowLink(icon: "wand.and.stars", color: .purple, title: "自定义表盘", dest: AnyView(MiCustomFaceView()))
+            Divider().padding(.leading, 52)
+            rowLink(icon: "figure.run.circle.fill", color: .green, title: "运动记录", dest: AnyView(MiSportRecordsView()))
+            Divider().padding(.leading, 52)
+            rowLink(icon: "bell.badge.fill", color: .red, title: "消息通知", dest: AnyView(MiNotifyCenterView()))
             Divider().padding(.leading, 52)
             rowLink(icon: "alarm.fill", color: .blue, title: "闹钟", dest: AnyView(MiAlarmView()))
             Divider().padding(.leading, 52)

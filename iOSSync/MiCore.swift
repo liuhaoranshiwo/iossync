@@ -11,8 +11,12 @@ enum MiTheme {
     static let subText = Color.gray.opacity(0.55)
 
     static func cardStyle() -> some View {
-        RoundedRectangle(cornerRadius: 16).fill(Color.white)
-            .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
+        RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.white)
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(Color.black.opacity(0.045), lineWidth: 0.5)
+            )
+            .shadow(color: .black.opacity(0.04), radius: 10, y: 3)
     }
 }
 

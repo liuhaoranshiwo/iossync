@@ -269,4 +269,89 @@ final class WatchClient {
             }
         }.resume()
     }
+
+    // MARK: - 自定义表盘（配置在手机端编辑，手表端只负责渲染）
+
+    func fetchFaceConfig(completion: @escaping ([String: Any]?) -> Void) {
+        getJSON("/customface") { j in completion(j?["config"] as? [String: Any]) }
+    }
+
+    func pushFaceConfig(_ cfg: [String: Any], completion: @escaping (Bool) -> Void) {
+        postJSON("/customface", body: ["config": cfg]) { j in
+            completion(j?["ok"] as? Bool ?? false)
+        }
+    }
+
+    /// 让手表全屏显示实时预览（与表盘同一渲染内核）
+    func openFacePreview(completion: @escaping (Bool) -> Void) {
+        postJSON("/customface/preview", body: [:]) { j in
+            completion(j?["ok"] as? Bool ?? false)
+        }
+    }
+
+    // MARK: - 运动记录
+
+    func fetchSportRecords(limit: Int = 20, completion: @escaping ([String: Any]?) -> Void) {
+        getJSON("/sport/records?limit=\(limit)") { j in completion(j) }
+    }
+
+    func removeSportRecord(id: Double, completion: @escaping (Bool) -> Void) {
+        postJSON("/sport/records", body: ["action": "remove", "id": id]) { j in
+            completion(j?["ok"] as? Bool ?? false)
+        }
+    }
+
+    // MARK: - 通知中心
+
+    func fetchNotifications(limit: Int = 30, completion: @escaping ([String: Any]?) -> Void) {
+        getJSON("/notifications?limit=\(limit)") { j in completion(j) }
+    }
+
+    func clearNotifications(completion: @escaping (Bool) -> Void) {
+        postJSON("/notifications", body: ["action": "clear"]) { j in
+            completion(j?["ok"] as? Bool ?? false)
+        }
+    }
+
+    func sendNotification(app: String, title: String, body: String,
+                          completion: @escaping (Bool) -> Void) {
+        postJSON("/notify", body: ["app": app, "title": title, "body": body]) { j in
+            completion(j?["ok"] as? Bool ?? false)
+        }
+    }
+
+    // MARK: - 通用请求
+
+    func getJSON(_ path: String, completion: @escaping ([String: Any]?) -> Void) {
+        guard let url = URL(string: baseURL + path) else {
+            DispatchQueue.main.async { completion(nil) }; return
+        }
+        var req = URLRequest(url: url, timeoutInterval: 8)
+        req.httpMethod = "GET"
+        URLSession.shared.dataTask(with: req) { data, resp, _ in
+            var out: [String: Any]?
+            if let http = resp as? HTTPURLResponse, http.statusCode == 200, let data = data {
+                out = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            }
+            DispatchQueue.main.async { completion(out) }
+        }.resume()
+    }
+
+    func postJSON(_ path: String, body: [String: Any],
+                  completion: @escaping ([String: Any]?) -> Void) {
+        guard let url = URL(string: baseURL + path) else {
+            DispatchQueue.main.async { completion(nil) }; return
+        }
+        var req = URLRequest(url: url, timeoutInterval: 8)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        URLSession.shared.dataTask(with: req) { data, resp, _ in
+            var out: [String: Any]?
+            if let http = resp as? HTTPURLResponse, http.statusCode == 200, let data = data {
+                out = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            }
+            DispatchQueue.main.async { completion(out) }
+        }.resume()
+    }
 }
