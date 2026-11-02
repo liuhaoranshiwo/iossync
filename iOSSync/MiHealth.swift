@@ -72,12 +72,28 @@ final class MiHealth {
 
     func fetchBoundDevices(completion: @escaping ([(model: String, name: String)]) -> Void) {
         signedGet(path: "user/get_bound_devices", params: [:]) { j in
+            // 保存原始返回供诊断显示
+            if let j = j,
+               let d = try? JSONSerialization.data(withJSONObject: j, options: [.sortedKeys]),
+               let s = String(data: d, encoding: .utf8) {
+                UserDefaults.standard.set(String(s.prefix(2000)), forKey: "mi_bound_raw")
+            }
             guard let j = j else { completion([]); return }
+            // 兼容多种响应结构：data.devices[] / data[] / data.list[]
             let arr = (j["data"] as? [String: Any])?["devices"] as? [[String: Any]]
+                ?? (j["data"] as? [String: Any])?["list"] as? [[String: Any]]
                 ?? j["data"] as? [[String: Any]] ?? []
             let list = arr.compactMap { d -> (String, String)? in
-                let m = d["model"] as? String ?? d["device_model"] as? String ?? ""
-                let n = d["name"] as? String ?? d["device_name"] as? String ?? m
+                let m = d["model"] as? String
+                    ?? d["device_model"] as? String
+                    ?? d["miot_model"] as? String
+                    ?? d["modelName"] as? String
+                    ?? (d["device"] as? [String: Any])?["model"] as? String
+                    ?? ""
+                let n = d["name"] as? String
+                    ?? d["device_name"] as? String
+                    ?? d["nickname"] as? String
+                    ?? m
                 return m.isEmpty ? nil : (m, n)
             }
             if let first = list.first {

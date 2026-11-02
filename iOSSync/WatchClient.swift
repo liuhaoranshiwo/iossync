@@ -136,4 +136,74 @@ final class WatchClient {
             }
         }.resume()
     }
+
+    // MARK: - 闹钟（手表自建闹钟引擎，系统级精确响铃）
+
+    func fetchAlarms(completion: @escaping ([String: Any]?) -> Void) {
+        guard let url = URL(string: baseURL + "/alarms") else {
+            DispatchQueue.main.async { completion(nil) }; return
+        }
+        URLSession.shared.dataTask(with: URLRequest(url: url, timeoutInterval: 6)) { data, resp, _ in
+            var j: [String: Any]?
+            if let http = resp as? HTTPURLResponse, http.statusCode == 200, let data = data {
+                j = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            }
+            DispatchQueue.main.async { completion(j) }
+        }.resume()
+    }
+
+    func alarmOp(_ op: String, id: Int = 0, hour: Int = 7, minute: Int = 30,
+                 days: [Int] = [], label: String = "",
+                 completion: @escaping ([String: Any]?) -> Void) {
+        guard let url = URL(string: baseURL + "/alarms") else {
+            DispatchQueue.main.async { completion(nil) }; return
+        }
+        var req = URLRequest(url: url, timeoutInterval: 8)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: [
+            "op": op, "id": id, "hour": hour, "minute": minute,
+            "days": days, "label": label,
+        ])
+        URLSession.shared.dataTask(with: req) { data, resp, _ in
+            var j: [String: Any]?
+            if let http = resp as? HTTPURLResponse, http.statusCode == 200, let data = data {
+                j = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            }
+            DispatchQueue.main.async { completion(j) }
+        }.resume()
+    }
+
+    // MARK: - 手表真实运动（ExerciseClient）
+
+    func sportAction(_ action: String, type: String = "running",
+                     completion: @escaping ([String: Any]?) -> Void) {
+        guard let url = URL(string: baseURL + "/sport") else {
+            DispatchQueue.main.async { completion(nil) }; return
+        }
+        var req = URLRequest(url: url, timeoutInterval: 20)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["action": action, "type": type])
+        URLSession.shared.dataTask(with: req) { data, resp, _ in
+            var j: [String: Any]?
+            if let http = resp as? HTTPURLResponse, http.statusCode == 200, let data = data {
+                j = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            }
+            DispatchQueue.main.async { completion(j) }
+        }.resume()
+    }
+
+    func sportSnapshot(completion: @escaping ([String: Any]?) -> Void) {
+        guard let url = URL(string: baseURL + "/sport") else {
+            DispatchQueue.main.async { completion(nil) }; return
+        }
+        URLSession.shared.dataTask(with: URLRequest(url: url, timeoutInterval: 6)) { data, resp, _ in
+            var j: [String: Any]?
+            if let http = resp as? HTTPURLResponse, http.statusCode == 200, let data = data {
+                j = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            }
+            DispatchQueue.main.async { completion(j) }
+        }.resume()
+    }
 }

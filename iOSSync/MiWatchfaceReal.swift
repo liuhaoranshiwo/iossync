@@ -1,6 +1,8 @@
 import SwiftUI
 
-/// 官方表盘商店客户端（watch-appstore.iot.mi.com，匿名可读）
+/// 官方表盘商店客户端（watch-appstore.iot.mi.com）
+/// 官方接口签名（反编译 g83.java）：GET /api/watchface/prize/tabs?model=&page=&size=&firmware_version=
+/// 注意：不能带 locale 参数（会命中国际版 fantasy 目录，与本机无关）
 final class MiWatchfaceStore: ObservableObject {
     struct Face: Identifiable {
         let id: String
@@ -17,40 +19,70 @@ final class MiWatchfaceStore: ObservableObject {
     @Published var tabs: [Tab] = []
     @Published var loading = false
     @Published var err = ""
+    /// 诊断信息：显示当前使用的 model 与回退过程
+    @Published var diag = ""
 
     private let host = "https://watch-appstore.iot.mi.com"
 
-    func load() {
-        guard tabs.isEmpty, !loading else { return }
-        loading = true
-        let model = UserDefaults.standard.string(forKey: "mi_device_model") ?? ""
-        var urlStr = host + "/api/watchface/prize/tabs?locale=zh_CN"
-        if !model.isEmpty {
-            urlStr += "&model=" + (model.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? model)
+    private func parseTabs(_ d: Data) -> [Tab] {
+        guard let j = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
+              let arr = j["data"] as? [[String: Any]] else { return [] }
+        return arr.compactMap { t in
+            guard let tid = (t["tab_id"] as? Int) ?? Int(t["tab_id"] as? String ?? "") else { return nil }
+            let name = t["tab_name"] as? String ?? "推荐"
+            let items = t["list"] as? [[String: Any]] ?? []
+            let faces: [Face] = items.compactMap { it in
+                guard let fid = (it["id"] as? String) ?? (it["id_v2"] as? String),
+                      let ic = it["icon"] as? String else { return nil }
+                return Face(id: fid, name: it["display_name"] as? String ?? fid, icon: ic)
+            }
+            return Tab(id: tid, name: name, faces: faces)
         }
-        guard let url = URL(string: urlStr) else { loading = false; return }
-        URLSession.shared.dataTask(with: url) { data, _, e in
+    }
+
+    private func fetch(_ query: String, done: @escaping ([Tab]) -> Void) {
+        guard let url = URL(string: host + "/api/watchface/prize/tabs?" + query) else { done([]); return }
+        URLSession.shared.dataTask(with: url) { data, _, _ in
             DispatchQueue.main.async {
-                self.loading = false
-                guard let d = data,
-                      let j = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
-                      let arr = j["data"] as? [[String: Any]] else {
-                    self.err = "表盘接口无数据：\(e?.localizedDescription ?? "解析失败")"
-                    return
-                }
-                self.tabs = arr.compactMap { t in
-                    guard let tid = t["tab_id"] as? Int else { return nil }
-                    let name = t["tab_name"] as? String ?? "推荐"
-                    let items = t["list"] as? [[String: Any]] ?? []
-                    let faces: [Face] = items.compactMap { it in
-                        guard let fid = it["id"] as? String,
-                              let ic = it["icon"] as? String else { return nil }
-                        return Face(id: fid, name: it["display_name"] as? String ?? fid, icon: ic)
-                    }
-                    return Tab(id: tid, name: name, faces: faces)
-                }
+                done(data.map { self.parseTabs($0) } ?? [])
             }
         }.resume()
+    }
+
+    /// 依次尝试：绑定设备型号 → 官方无 model 目录 → 直接失败
+    func load() {
+        guard !loading else { return }
+        loading = true
+        err = ""
+        let model = UserDefaults.standard.string(forKey: "mi_device_model") ?? ""
+        let devName = UserDefaults.standard.string(forKey: "mi_device_name") ?? ""
+        let raw = UserDefaults.standard.string(forKey: "mi_bound_raw") ?? ""
+        var attempts: [(String, String)] = []
+        if !model.isEmpty {
+            attempts.append(("本机型号 " + model,
+                             "model=\(model)&page=0&size=30"))
+        }
+        attempts.append(("官方默认目录", "page=0&size=30"))
+        self.diag = "缓存型号[\(model)] 设备[\(devName)] 绑定返回[\(String(raw.prefix(160)))]"
+
+        func tryNext(_ i: Int) {
+            guard i < attempts.count else {
+                self.loading = false
+                self.err = "表盘接口无数据"
+                return
+            }
+            let (label, q) = attempts[i]
+            fetch(q) { tabs in
+                if !tabs.isEmpty && tabs.contains(where: { !$0.faces.isEmpty }) {
+                    self.tabs = tabs
+                    self.loading = false
+                    self.diag = (i == 0 ? "✓ " : "⚠ 回退 ") + label
+                } else {
+                    tryNext(i + 1)
+                }
+            }
+        }
+        tryNext(0)
     }
 }
 
@@ -65,6 +97,11 @@ struct MiWatchfaceRealView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if !store.diag.isEmpty {
+                Text(store.diag)
+                    .font(.system(size: 9)).foregroundColor(MiTheme.subText)
+                    .lineLimit(2).padding(.horizontal, 12).padding(.top, 4)
+            }
             if !store.tabs.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
@@ -120,6 +157,11 @@ struct MiWatchfaceRealView: View {
         .background(MiTheme.bg.ignoresSafeArea())
         .navigationTitle("表盘市场")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { store.load() }
+        .onAppear {
+            if UserDefaults.standard.string(forKey: "mi_device_model")?.isEmpty != false {
+                MiHealth.shared.fetchBoundDevices { _ in }
+            }
+            store.load()
+        }
     }
 }

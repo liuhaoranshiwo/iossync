@@ -182,6 +182,12 @@ struct MiSleepView: View {
 struct MiSportView: View {
     @State private var records: [MiHealth.Record] = []
     @State private var recErr = ""
+    // 手表真实运动（ExerciseClient）
+    @State private var exercising = false
+    @State private var sportType = "running"
+    @State private var metrics: [String: Any] = [:]
+    @State private var sportStatus = ""
+    @State private var timer: Timer?
 
     private func loadRecords() {
         MiHealth.shared.fetchSportRecords { recs in
@@ -195,11 +201,120 @@ struct MiSportView: View {
         ("dumbbell.fill", "力量训练", .purple), ("leaf.fill", "瑜伽", .pink),
         ("figure.walk", "健走", .mint), ("figure.jumprope", "跳绳", .teal),
     ]
+    // 手表 ExerciseClient 类型映射
+    private let watchTypes: [(String, String)] = [
+        ("running", "跑步"), ("walking", "健走"), ("cycling", "骑行"),
+        ("hiking", "徒步"), ("strength", "力量训练"), ("treadmill", "跑步机"),
+    ]
+
+    private func startWatchSport() {
+        sportStatus = "正在启动手表运动…"
+        WatchClient.shared.sportAction("start", type: sportType) { j in
+            if let j = j, j["ok"] as? Bool == true, j["started"] as? Bool == true {
+                exercising = true
+                sportStatus = "✓ 手表运动进行中"
+                startPolling()
+            } else {
+                sportStatus = "启动失败：" + ((j?["msg"] as? String) ?? "手表未连接")
+            }
+        }
+    }
+
+    private func stopWatchSport() {
+        WatchClient.shared.sportAction("stop") { j in
+            exercising = false
+            timer?.invalidate()
+            if let j = j, j["ok"] as? Bool == true {
+                metrics = j["metrics"] as? [String: Any] ?? [:]
+                sportStatus = "已结束，运动数据已记录在手表"
+            } else {
+                sportStatus = "停止失败：" + ((j?["msg"] as? String) ?? "")
+            }
+            loadRecords()
+        }
+    }
+
+    private func startPolling() {
+        timer?.invalidate()
+        timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { _ in
+            WatchClient.shared.sportSnapshot { j in
+                guard let j = j else { return }
+                metrics = j["metrics"] as? [String: Any] ?? [:]
+                exercising = j["exercising"] as? Bool ?? exercising
+            }
+        }
+    }
+
+    private func fmtDist() -> String {
+        let d = metrics["distance_m"] as? Double ?? 0
+        return d >= 1000 ? String(format: "%.2f km", d / 1000) : String(format: "%.0f m", d)
+    }
+
+    private func metricCell(value: String, label: String) -> some View {
+        VStack(spacing: 2) {
+            Text(value).font(.system(size: 15, weight: .semibold, design: .rounded)).foregroundColor(MiTheme.text)
+            Text(label).font(.system(size: 9)).foregroundColor(MiTheme.subText)
+        }
+        .frame(maxWidth: .infinity)
+    }
 
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 14) {
                 Text("运动").font(.title2.bold()).foregroundColor(MiTheme.text).padding(.top, 8)
+                // 手表运动联动（真实 ExerciseClient）
+                MiCard {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Text("手表运动").font(.subheadline.weight(.semibold)).foregroundColor(MiTheme.text)
+                            Spacer()
+                            Text(exercising ? "● 运动中" : "手表联动")
+                                .font(.caption2)
+                                .foregroundColor(exercising ? .red : MiTheme.subText)
+                        }
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(watchTypes, id: \.0) { key, name in
+                                    Text(name)
+                                        .font(.caption)
+                                        .foregroundColor(sportType == key ? .white : MiTheme.text)
+                                        .padding(.horizontal, 14).padding(.vertical, 7)
+                                        .background(Capsule().fill(sportType == key ? MiTheme.orange : Color.gray.opacity(0.1)))
+                                        .onTapGesture { if !exercising { sportType = key } }
+                                }
+                            }
+                        }
+                        HStack(spacing: 0) {
+                            metricCell(value: "\(Int(metrics["heart_rate"] as? Double ?? 0))",
+                                       label: "心率 bpm")
+                            metricCell(value: "\(metrics["steps"] as? Int ?? 0)", label: "步数")
+                            metricCell(value: fmtDist(), label: "距离")
+                            metricCell(value: "\(metrics["duration_s"] as? Int ?? 0)s", label: "时长")
+                            metricCell(value: String(format: "%.1f", metrics["calories"] as? Double ?? 0),
+                                       label: "千卡")
+                        }
+                        HStack(spacing: 10) {
+                            if exercising {
+                                Button(action: stopWatchSport) {
+                                    Text("结束运动")
+                                        .font(.subheadline.bold()).foregroundColor(.white)
+                                        .frame(maxWidth: .infinity).padding(.vertical, 12)
+                                        .background(RoundedRectangle(cornerRadius: 24).fill(Color.red))
+                                }
+                            } else {
+                                Button(action: startWatchSport) {
+                                    Text("在手表上开始")
+                                        .font(.subheadline.bold()).foregroundColor(.white)
+                                        .frame(maxWidth: .infinity).padding(.vertical, 12)
+                                        .background(RoundedRectangle(cornerRadius: 24).fill(MiTheme.orange))
+                                }
+                            }
+                        }
+                        if !sportStatus.isEmpty {
+                            Text(sportStatus).font(.system(size: 10)).foregroundColor(MiTheme.subText)
+                        }
+                    }
+                }
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                     ForEach(sports, id: \.1) { item in
                         VStack(spacing: 8) {
@@ -246,7 +361,16 @@ struct MiSportView: View {
         }
         .background(MiTheme.bg.ignoresSafeArea())
         .navigationBarHidden(true)
-        .onAppear { loadRecords() }
+        .onAppear {
+            loadRecords()
+            // 若手表上已有进行中的运动则恢复显示
+            WatchClient.shared.sportSnapshot { j in
+                if let j = j, j["exercising"] as? Bool == true {
+                    exercising = true
+                    startPolling()
+                }
+            }
+        }
     }
 }
 
@@ -599,20 +723,141 @@ struct MiNotifyView: View {
     }
 }
 
-// MARK: - 闹钟（占位：官方走 /v1/alerts/alarms 云接口，需登录后接入）
+// MARK: - 闹钟（真实写入手表系统闹钟：AlarmManager.setAlarmClock，表盘显示闹钟标记）
 
 struct MiAlarmView: View {
+    @State private var alarms: [[String: Any]] = []
+    @State private var systemNext = ""
+    @State private var status = ""
+    @State private var hour = 7
+    @State private var minute = 30
+    @State private var label = ""
+    @State private var days: Set<Int> = []
+    private let dayNames = ["日", "一", "二", "三", "四", "五", "六"] // 1=周日…7=周六
+
     var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "alarm").font(.system(size: 40)).foregroundColor(.blue)
-            Text("闹钟同步待接入").font(.headline).foregroundColor(MiTheme.text)
-            Text("官方接口 /v1/alerts/alarms 需要小米账号授权，登录后开放")
-                .font(.caption).foregroundColor(MiTheme.subText)
-                .multilineTextAlignment(.center)
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: 14) {
+                // 已有闹钟列表
+                MiCard {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Text("手表闹钟").font(.subheadline.weight(.semibold)).foregroundColor(MiTheme.text)
+                            Spacer()
+                            Button("刷新") { load() }.font(.caption).foregroundColor(MiTheme.orange)
+                        }
+                        if alarms.isEmpty {
+                            Text(status.isEmpty ? "暂无闹钟，在下方添加后写入手表" : status)
+                                .font(.caption2).foregroundColor(MiTheme.subText)
+                        } else {
+                            ForEach(alarms.indices, id: \.self) { i in
+                                let a = alarms[i]
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(String(format: "%02d:%02d", a["hour"] as? Int ?? 0, a["minute"] as? Int ?? 0))
+                                            .font(.system(size: 26, weight: .light, design: .rounded))
+                                            .foregroundColor(a["enabled"] as? Bool == false ? MiTheme.subText : MiTheme.text)
+                                        let d = (a["days"] as? [Int]) ?? []
+                                        HStack(spacing: 4) {
+                                            Text(a["label"] as? String ?? "").font(.caption2).foregroundColor(MiTheme.subText)
+                                            if !d.isEmpty {
+                                                Text(d.sorted().map { "周\(dayNames[$0 - 1])" }.joined(separator: " "))
+                                                    .font(.system(size: 9)).foregroundColor(MiTheme.orange)
+                                            } else {
+                                                Text("单次").font(.system(size: 9)).foregroundColor(MiTheme.subText)
+                                            }
+                                        }
+                                    }
+                                    Spacer()
+                                    // 开关
+                                    Toggle("", isOn: Binding(
+                                        get: { a["enabled"] as? Bool ?? false },
+                                        set: { on in
+                                            let id = a["id"] as? Int ?? 0
+                                            WatchClient.shared.alarmOp("toggle", id: id) { _ in load() }
+                                            _ = on
+                                        })).labelsHidden()
+                                    Button {
+                                        WatchClient.shared.alarmOp("remove", id: a["id"] as? Int ?? 0) { _ in load() }
+                                    } label: {
+                                        Image(systemName: "trash").font(.caption).foregroundColor(.red)
+                                    }
+                                }
+                                Divider()
+                            }
+                        }
+                        if !systemNext.isEmpty {
+                            Text(systemNext).font(.system(size: 9)).foregroundColor(MiTheme.subText)
+                        }
+                    }
+                }
+                // 新增闹钟
+                MiCard {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("添加闹钟").font(.subheadline.weight(.semibold)).foregroundColor(MiTheme.text)
+                        HStack {
+                            Picker("", selection: $hour) {
+                                ForEach(0..<24, id: \.self) { Text("\($0)").tag($0) }
+                            }.pickerStyle(.wheel).frame(width: 70).clipped()
+                            Text(":").font(.title2)
+                            Picker("", selection: $minute) {
+                                ForEach(0..<60, id: \.self) { Text(String(format: "%02d", $0)).tag($0) }
+                            }.pickerStyle(.wheel).frame(width: 70).clipped()
+                        }
+                        .frame(height: 90)
+                        HStack(spacing: 6) {
+                            ForEach(1...7, id: \.self) { d in
+                                Text("周\(dayNames[d - 1])")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(days.contains(d) ? .white : MiTheme.subText)
+                                    .padding(.horizontal, 7).padding(.vertical, 5)
+                                    .background(Capsule().fill(days.contains(d) ? MiTheme.orange : Color.gray.opacity(0.12)))
+                                    .onTapGesture { if days.contains(d) { days.remove(d) } else { days.insert(d) } }
+                            }
+                        }
+                        TextField("备注（可选）", text: $label)
+                            .font(.caption)
+                            .padding(10)
+                            .background(RoundedRectangle(cornerRadius: 8).fill(Color.gray.opacity(0.08)))
+                        Button {
+                            WatchClient.shared.alarmOp("add", hour: hour, minute: minute,
+                                                       days: Array(days).sorted(), label: label) { j in
+                                if let j = j, j["ok"] as? Bool == true {
+                                    status = "✓ 已写入手表，系统级精确响铃"
+                                    load()
+                                } else {
+                                    status = "写入失败"
+                                }
+                            }
+                        } label: {
+                            Text("写入手表")
+                                .font(.subheadline.bold()).foregroundColor(.white)
+                                .frame(maxWidth: .infinity).padding(.vertical, 12)
+                                .background(RoundedRectangle(cornerRadius: 24).fill(MiTheme.orange))
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 16).padding(.vertical, 10).padding(.bottom, 60)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(MiTheme.bg.ignoresSafeArea())
         .navigationTitle("闹钟")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear { load() }
+    }
+
+    private func load() {
+        WatchClient.shared.fetchAlarms { j in
+            guard let j = j, j["ok"] as? Bool == true else {
+                status = "读取失败：手表未连接"; return
+            }
+            alarms = j["alarms"] as? [[String: Any]] ?? []
+            if let t = j["system_next_trigger_at"] as? Double, t > 0 {
+                let df = DateFormatter()
+                df.dateFormat = "MM-dd HH:mm"
+                systemNext = "系统下一个闹钟：" + df.string(from: Date(timeIntervalSince1970: t / 1000))
+            }
+        }
     }
 }
 
