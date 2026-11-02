@@ -195,29 +195,44 @@ struct MiSportView: View {
             recErr = recs.isEmpty ? (MiHealth.shared.lastError.isEmpty ? "" : "拉取失败：" + MiHealth.shared.lastError) : ""
         }
     }
-    private let sports: [(String, String, Color)] = [
-        ("outdoor.run", "户外跑", .green), ("indoor.run", "室内跑", .orange),
-        ("bicycle", "骑行", .blue), ("figure.pool.swim", "游泳", .cyan),
-        ("dumbbell.fill", "力量训练", .purple), ("leaf.fill", "瑜伽", .pink),
-        ("figure.walk", "健走", .mint), ("figure.jumprope", "跳绳", .teal),
+    /// 图标 / 名称 / 颜色 / 手表 ExerciseClient 类型
+    private let sports: [(String, String, Color, String)] = [
+        ("outdoor.run", "户外跑", .green, "running"),
+        ("indoor.run", "室内跑", .orange, "indoor_run"),
+        ("bicycle", "骑行", .blue, "cycling"),
+        ("figure.pool.swim", "游泳", .cyan, "swimming"),
+        ("dumbbell.fill", "力量训练", .purple, "strength"),
+        ("leaf.fill", "瑜伽", .pink, "yoga"),
+        ("figure.walk", "健走", .mint, "walking"),
+        ("figure.jumprope", "跳绳", .teal, "jumprope"),
     ]
-    // 手表 ExerciseClient 类型映射
-    private let watchTypes: [(String, String)] = [
-        ("running", "跑步"), ("walking", "健走"), ("cycling", "骑行"),
-        ("hiking", "徒步"), ("strength", "力量训练"), ("treadmill", "跑步机"),
-    ]
+
+    /// 点图标 = 让手表真的开始这项运动；再点一次结束
+    private func tapSport(_ key: String) {
+        if exercising {
+            if sportType == key { stopWatchSport() }
+            else { sportStatus = "手表已有运动进行中，先结束当前运动" }
+            return
+        }
+        sportType = key
+        startWatchSport()
+    }
 
     private func startWatchSport() {
         sportStatus = "正在启动手表运动…"
         WatchClient.shared.sportAction("start", type: sportType) { j in
             if let j = j, j["ok"] as? Bool == true, j["started"] as? Bool == true {
                 exercising = true
-                sportStatus = "✓ 手表运动进行中"
+                sportStatus = "✓ 手表运动进行中（\(sportName(sportType))），再点一次该图标结束"
                 startPolling()
             } else {
-                sportStatus = "启动失败：" + ((j?["msg"] as? String) ?? "手表未连接")
+                sportStatus = "启动失败：" + ((j?["msg"] as? String) ?? "手表未连接（检查同一 Wi-Fi）")
             }
         }
+    }
+
+    private func sportName(_ key: String) -> String {
+        sports.first(where: { $0.3 == key })?.1 ?? key
     }
 
     private func stopWatchSport() {
@@ -272,17 +287,9 @@ struct MiSportView: View {
                                 .font(.caption2)
                                 .foregroundColor(exercising ? .red : MiTheme.subText)
                         }
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) {
-                                ForEach(watchTypes, id: \.0) { key, name in
-                                    Text(name)
-                                        .font(.caption)
-                                        .foregroundColor(sportType == key ? .white : MiTheme.text)
-                                        .padding(.horizontal, 14).padding(.vertical, 7)
-                                        .background(Capsule().fill(sportType == key ? MiTheme.orange : Color.gray.opacity(0.1)))
-                                        .onTapGesture { if !exercising { sportType = key } }
-                                }
-                            }
+                        if exercising {
+                            Text("当前运动：\(sportName(sportType))")
+                                .font(.caption2).foregroundColor(MiTheme.orange)
                         }
                         HStack(spacing: 0) {
                             metricCell(value: "\(Int(metrics["heart_rate"] as? Double ?? 0))",
@@ -317,13 +324,30 @@ struct MiSportView: View {
                 }
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                     ForEach(sports, id: \.1) { item in
+                        let active = exercising && sportType == item.3
                         VStack(spacing: 8) {
-                            Image(systemName: item.0).font(.title2).foregroundColor(item.2)
-                            Text(item.1).font(.caption).foregroundColor(MiTheme.text)
+                            Image(systemName: item.0).font(.title2)
+                                .foregroundColor(active ? .white : item.2)
+                            Text(item.1).font(.caption)
+                                .foregroundColor(active ? .white : MiTheme.text)
+                            if active {
+                                Text("运动中 · 点击结束")
+                                    .font(.system(size: 9)).foregroundColor(.white.opacity(0.9))
+                            }
                         }
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 20)
-                        .background(MiTheme.cardStyle())
+                        .padding(.vertical, active ? 16 : 20)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(active ? MiTheme.orange : Color.white)
+                                .shadow(color: Color.black.opacity(0.04), radius: 6, y: 2)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(active ? Color.clear : Color.gray.opacity(0.08), lineWidth: 1)
+                        )
+                        .contentShape(Rectangle())
+                        .onTapGesture { tapSport(item.3) }
                     }
                 }
                 MiCard {
@@ -418,7 +442,7 @@ struct MiDeviceView: View {
 
     private var functionList: some View {
         VStack(spacing: 0) {
-            rowLink(icon: "square.grid.2x2.fill", color: MiTheme.orange, title: "表盘市场", dest: AnyView(MiWatchfaceRealView()))
+            rowLink(icon: "square.grid.2x2.fill", color: MiTheme.orange, title: "表盘", dest: AnyView(MiWatchfaceRealView()))
             Divider().padding(.leading, 52)
             rowLink(icon: "bell.badge.fill", color: .red, title: "消息通知", dest: AnyView(MiNotifyView()))
             Divider().padding(.leading, 52)
