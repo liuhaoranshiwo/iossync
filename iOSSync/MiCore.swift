@@ -90,6 +90,7 @@ struct MiLoginView: View {
     @State private var password = ""
     @State private var agreed = false
     @State private var err = ""
+    @State private var showSmsInfo = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -131,10 +132,18 @@ struct MiLoginView: View {
                 }
                 .disabled(phone.count < 5 || password.isEmpty)
 
+                Text("本地会话模式 · 小米云同步二期接入")
+                    .font(.caption2).foregroundColor(MiTheme.subText)
+
                 Button {
-                    doLogin() // 短信验证码登录入口（同一账号体系）
+                    showSmsInfo = true
                 } label: {
                     Text("短信验证码登录").font(.subheadline).foregroundColor(MiTheme.orange)
+                }
+                .alert("短信登录通道", isPresented: $showSmsInfo) {
+                    Button("知道了", role: .cancel) {}
+                } message: {
+                    Text("短信验证码登录需要小米云验证服务，将在小米云接入后开放。当前请使用密码登录（本地会话模式，设备功能不受影响）。")
                 }
             }
             .padding(.horizontal, 32)

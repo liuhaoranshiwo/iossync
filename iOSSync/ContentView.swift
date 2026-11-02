@@ -7,13 +7,17 @@ struct ContentView: View {
 
     var body: some View {
         TabView {
-            MiHomeView()
+            NavigationView { MiHomeView() }
+                .navigationViewStyle(.stack)
                 .tabItem { Label("健康", systemImage: "heart.text.square.fill") }
-            MiSportView()
+            NavigationView { MiSportView() }
+                .navigationViewStyle(.stack)
                 .tabItem { Label("运动", systemImage: "figure.run") }
-            MiDeviceView()
+            NavigationView { MiDeviceView() }
+                .navigationViewStyle(.stack)
                 .tabItem { Label("设备", systemImage: "applewatch") }
-            MiProfileView()
+            NavigationView { MiProfileView() }
+                .navigationViewStyle(.stack)
                 .tabItem { Label("我的", systemImage: "person.fill") }
         }
         .tint(MiTheme.orange)
