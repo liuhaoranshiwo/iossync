@@ -127,14 +127,44 @@ struct MiSportRecordsView: View {
 
     private func load() {
         loading = true; err = ""
-        WatchClient.shared.fetchSportRecords(limit: 30) { j in
+        // 游标：只拉比上次更新的记录，断连重连不用全量重来
+        let cursor = UserDefaults.standard.object(forKey: "sport_cursor") as? Int64 ?? 0
+        WatchClient.shared.fetchSportRecords(limit: 30, since: cursor) { j in
             loading = false
             guard let j = j, j["ok"] as? Bool == true else {
                 err = "读取失败：手表未连接（确认手机与手表同一 Wi-Fi）"
                 return
             }
             summary = j["summary"] as? [String: Any] ?? [:]
-            records = j["list"] as? [[String: Any]] ?? []
+            let incoming = j["list"] as? [[String: Any]] ?? []
+
+            // 时间重基：手表时钟偏差超过 5 分钟就按偏差校正，避免记录时间全错
+            let serverNow = j["server_now"] as? Double ?? 0
+            let skew = WatchClient.clockSkewMs(serverNow: serverNow)
+            let fixSkew = abs(skew) > 5 * 60 * 1000
+            let fixed = incoming.map { r -> [String: Any] in
+                guard fixSkew else { return r }
+                var m = r
+                if let s = m["start_at"] as? Double { m["start_at"] = s - skew }
+                return m
+            }
+
+            // 按 id 去重合并（游标可能重叠，重跑也不会重复）
+            var byId: [Int: [String: Any]] = [:]
+            for r in records {
+                if let id = r["id"] as? Int { byId[id] = r }
+            }
+            for r in fixed {
+                if let id = r["id"] as? Int { byId[id] = r }
+            }
+            records = byId.values.sorted {
+                ($0["start_at"] as? Double ?? 0) > ($1["start_at"] as? Double ?? 0)
+            }
+
+            // 推进游标到手表已落库的最新一条
+            if let newest = j["newest_at"] as? Double, newest > 0 {
+                UserDefaults.standard.set(Int64(newest), forKey: "sport_cursor")
+            }
         }
     }
 }

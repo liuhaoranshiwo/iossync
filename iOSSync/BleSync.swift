@@ -26,7 +26,12 @@ final class BleSync: NSObject, ObservableObject {
 
     override private init() {
         super.init()
-        central = CBCentralManager(delegate: self, queue: nil)
+        // 状态恢复标识：App 被系统回收后，只要有 BLE 事件会被重新拉起并交回外设
+        central = CBCentralManager(
+            delegate: self,
+            queue: nil,
+            options: [CBCentralManagerOptionRestoreIdentifierKey: "com.iossync.central"]
+        )
     }
 
     /// 通过蓝牙发送同步数据
@@ -95,6 +100,14 @@ final class BleSync: NSObject, ObservableObject {
 }
 
 extension BleSync: CBCentralManagerDelegate {
+    /// 系统恢复现场：把外设和代理接回来，避免断连后彻底失联
+    func centralManager(_ central: CBCentralManager, willRestoreState dict: [String: Any]) {
+        guard let per = (dict[CBCentralManagerRestoredStatePeripheralsKey] as? [CBPeripheral])?.first else { return }
+        peripheral = per
+        per.delegate = self
+        state = "已恢复连接"
+    }
+
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         if central.state == .poweredOn, pendingJSON != nil, !connected {
             central.scanForPeripherals(withServices: [Self.serviceUUID])

@@ -3,7 +3,9 @@ import Foundation
 /// 手表端 HTTP 客户端（与手表 iOSSync App 的 /sync 端点对接）
 final class WatchClient {
     static let shared = WatchClient()
-    static let defaultBase = "http://192.168.2.76:8787"
+    /// 不写死 IP（路由器天天换）——默认空，靠 Bonjour 自动发现填充。
+    /// 只有发现失败时才会回退到 UserDefaults 里上次成功的地址。
+    static let defaultBase = ""
 
     var baseURL: String {
         get {
@@ -36,6 +38,12 @@ final class WatchClient {
         guard Date().timeIntervalSince(lastDiscoverAt) > 20 else { return }
         lastDiscoverAt = Date()
         WatchDiscovery.shared.start(timeout: 5)
+    }
+
+    /// 手表时钟相对手机的偏差（毫秒，>0 表示手表快）。用于时间重基。
+    static func clockSkewMs(serverNow: Double) -> Double {
+        guard serverNow > 0 else { return 0 }
+        return serverNow - Date().timeIntervalSince1970 * 1000
     }
 
     /// 探活：能 ping 通就记住这个地址
@@ -317,8 +325,11 @@ final class WatchClient {
 
     // MARK: - 运动记录
 
-    func fetchSportRecords(limit: Int = 20, completion: @escaping ([String: Any]?) -> Void) {
-        getJSON("/sport/records?limit=\(limit)") { j in completion(j) }
+    func fetchSportRecords(limit: Int = 20, since: Int64 = 0,
+                           completion: @escaping ([String: Any]?) -> Void) {
+        var path = "/sport/records?limit=\(limit)"
+        if since > 0 { path += "&since=\(since)" }   // 有游标就只拉增量
+        getJSON(path) { j in completion(j) }
     }
 
     func removeSportRecord(id: Double, completion: @escaping (Bool) -> Void) {
@@ -329,8 +340,11 @@ final class WatchClient {
 
     // MARK: - 通知中心
 
-    func fetchNotifications(limit: Int = 30, completion: @escaping ([String: Any]?) -> Void) {
-        getJSON("/notifications?limit=\(limit)") { j in completion(j) }
+    func fetchNotifications(limit: Int = 30, since: Int64 = 0,
+                            completion: @escaping ([String: Any]?) -> Void) {
+        var path = "/notifications?limit=\(limit)"
+        if since > 0 { path += "&since=\(since)" }
+        getJSON(path) { j in completion(j) }
     }
 
     func clearNotifications(completion: @escaping (Bool) -> Void) {
