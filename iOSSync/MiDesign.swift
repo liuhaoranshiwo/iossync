@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // MARK: - 设计令牌（Design Tokens）
 //
@@ -29,8 +30,13 @@ extension MiTheme {
     static let surfaceAlt = Color(red: 0.957, green: 0.961, blue: 0.969)   // #F4F5F7
     static let border = Color.black.opacity(0.045)
     static let divider = Color(red: 0.933, green: 0.941, blue: 0.949)       // #EEF0F3
-    static let textSecondary = Color(red: 0.42, green: 0.45, blue: 0.50)    // #6B7380
-    static let textTertiary = Color(red: 0.60, green: 0.63, blue: 0.67)     // #9AA0AB
+    // 对比度对照（白底，WCAG AA 要求 ≥4.5:1）：
+    //   textSecondary #4B5563 ≈ 7.6:1  —— 正文/次要信息
+    //   textTertiary  #6B7280 ≈ 4.9:1  —— 说明文字（原 #9AA0AB 仅 2.6:1，已废弃）
+    //   textDecorative 仅用于纯装饰，不可承载信息
+    static let textSecondary = Color(red: 0.294, green: 0.333, blue: 0.388) // #4B5563
+    static let textTertiary = Color(red: 0.42, green: 0.447, blue: 0.502)   // #6B7280
+    static let textDecorative = Color(red: 0.60, green: 0.63, blue: 0.67)   // #9AA0AB，仅装饰
     static let success = Color(red: 0.07, green: 0.72, blue: 0.42)          // #12B76A
     static let danger = Color(red: 0.94, green: 0.27, blue: 0.22)           // #F04438
     static let info = Color(red: 0.18, green: 0.48, blue: 1.0)              // #2E7BFF
@@ -43,7 +49,70 @@ extension Font {
     static let miHeadline = Font.system(size: 17, weight: .semibold)
     static let miBody = Font.system(size: 15, weight: .regular)
     static let miCaption = Font.system(size: 12, weight: .regular)
-    static let miMicro = Font.system(size: 10, weight: .medium)
+    static let miMicro = Font.system(size: 11, weight: .medium)   // 10 → 11，守住 Apple 可读下限
+}
+
+// MARK: - 动态字体（Dynamic Type）
+//
+// 上面这些 `Font.system(size:)` 是**固定像素**，系统调大字号时不会跟随——
+// 这是最能暴露"没做无障碍"的一条。这里用 UIFontMetrics 按基准字号缩放：
+// 默认字号下视觉完全不变，放大字号时跟着涨。
+
+private struct MiDynamicFont: ViewModifier {
+    let size: CGFloat
+    let weight: Font.Weight
+    let style: Font.TextStyle
+
+    @Environment(\.sizeCategory) private var category
+
+    func body(content: Content) -> some View {
+        content.font(.system(size: scaledSize, weight: weight))
+    }
+
+    private var scaledSize: CGFloat {
+        let metrics = UIFontMetrics(forTextStyle: style.uiStyle)
+        return metrics.scaledValue(for: size)
+    }
+}
+
+extension View {
+    /// 跟随系统字号的文本样式（替代直接用 .font(.system(size:))）
+    func miFont(_ size: CGFloat, weight: Font.Weight = .regular,
+                relativeTo style: Font.TextStyle = .body) -> some View {
+        modifier(MiDynamicFont(size: size, weight: weight, style: style))
+    }
+
+    /// 数值：等宽 + 单行 + 允许缩小，避免 5 位数或"120分"撑破布局
+    func miNumber(_ size: CGFloat, weight: Font.Weight = .semibold) -> some View {
+        self.font(.system(size: size, weight: weight).monospacedDigit())
+            .lineLimit(1)
+            .minimumScaleFactor(0.65)
+    }
+
+    /// 统一最小点击热区 44pt（Apple HIG）
+    func miTapTarget() -> some View {
+        self.frame(minHeight: 44)
+            .contentShape(Rectangle())
+    }
+}
+
+extension Font.TextStyle {
+    var uiStyle: UIFont.TextStyle {
+        switch self {
+        case .largeTitle: return .largeTitle
+        case .title: return .title1
+        case .title2: return .title2
+        case .title3: return .title3
+        case .headline: return .headline
+        case .subheadline: return .subheadline
+        case .body: return .body
+        case .callout: return .callout
+        case .footnote: return .footnote
+        case .caption: return .caption1
+        case .caption2: return .caption2
+        @unknown default: return .body
+        }
+    }
 }
 
 // MARK: - 卡片
@@ -80,11 +149,87 @@ struct MiSectionTitle: View {
             Text(text).font(.miHeadline).foregroundColor(MiTheme.text)
             Spacer()
             if let a = action, let tap = onAction {
-                Button(a, action: tap)
-                    .font(.miCaption)
-                    .foregroundColor(MiTheme.orange)
+                Button(action: tap) {
+                    Text(a)
+                        .miFont(13, weight: .semibold, relativeTo: .caption)
+                        .foregroundColor(MiTheme.orange)
+                        .padding(.horizontal, MiSpace.sm)
+                }
+                .buttonStyle(.plain)
+                .miTapTarget()          // 44pt 最小热区
             }
         }
+    }
+}
+
+// MARK: - 状态视图（空 / 加载 / 错误 三态统一）
+
+/// 统一的空态、加载态、错误态。
+/// 之前每个页面各写一套 Text("读取失败…")，文案、图标、留白都不一致。
+struct MiStateView: View {
+    enum Kind {
+        case empty, loading, error
+
+        var icon: String {
+            switch self {
+            case .empty: return "tray"
+            case .loading: return "arrow.triangle.2.circlepath"
+            case .error: return "exclamationmark.triangle"
+            }
+        }
+
+        var tint: Color {
+            switch self {
+            case .empty: return MiTheme.textDecorative
+            case .loading: return MiTheme.orange
+            case .error: return MiTheme.danger
+            }
+        }
+    }
+
+    let kind: Kind
+    let title: String
+    var message: String? = nil
+    var actionTitle: String? = nil
+    var onAction: (() -> Void)? = nil
+
+    var body: some View {
+        VStack(spacing: MiSpace.md) {
+            if kind == .loading {
+                ProgressView().tint(kind.tint)
+            } else {
+                Image(systemName: kind.icon)
+                    .font(.system(size: 26, weight: .regular))
+                    .foregroundColor(kind.tint)
+            }
+            Text(title)
+                .miFont(15, weight: .medium)
+                .foregroundColor(MiTheme.text)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            if let m = message, !m.isEmpty {
+                Text(m)
+                    .miFont(13, relativeTo: .footnote)
+                    .foregroundColor(MiTheme.textTertiary)   // 已是 ≥4.5:1 的说明色
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let t = actionTitle, let tap = onAction {
+                Button(action: tap) {
+                    Text(t)
+                        .miFont(14, weight: .semibold)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, MiSpace.xl)
+                        .padding(.vertical, MiSpace.sm)
+                        .background(Capsule().fill(MiTheme.orange))
+                }
+                .buttonStyle(.plain)
+                .miTapTarget()
+            }
+        }
+        .padding(.vertical, MiSpace.xxl)
+        .padding(.horizontal, MiSpace.lg)
+        .frame(maxWidth: .infinity)
     }
 }
 
