@@ -302,20 +302,7 @@ struct MiSportView: View {
             .fill(MiTheme.surfaceAlt))
     }
 
-    /// 把系统网络错误译成人话，别把 NSURLError 原文糊到界面上
-    private func friendlyNetError(_ raw: String) -> String {
-        let lower = raw.lowercased()
-        if lower.contains("hostname could not be found") || lower.contains("cannot find host") {
-            return "找不到手表地址。确认手机和手表连同一个 Wi-Fi，或点「重新发现」重新定位手表。"
-        }
-        if lower.contains("timed out") || lower.contains("timeout") {
-            return "连接手表超时。手表可能息屏了，点亮后重试。"
-        }
-        if lower.contains("offline") || lower.contains("not connected") {
-            return "手表未连接。"
-        }
-        return raw
-    }
+
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -347,7 +334,9 @@ struct MiSportView: View {
                         }
                         HStack(spacing: 10) {
                             if exercising {
-                                MiButton(title: "结束运动", style: .destructive, action: stopWatchSport)
+                                // 原生模式下我们无法代按「结束」，按钮只负责把界面顶到前台
+                                MiButton(title: nativeMode ? "打开手表结束" : "结束运动",
+                                         style: .destructive, action: stopWatchSport)
                             } else {
                                 MiButton(title: "在手表上开始", systemImage: "applewatch",
                                          style: .primary, action: startWatchSport)
@@ -546,11 +535,10 @@ struct MiDeviceView: View {
                 }
                 VStack(alignment: .leading, spacing: 4) {
                     Text("小米手表 2 Pro").font(.subheadline.weight(.bold)).foregroundColor(MiTheme.text)
-                    HStack(spacing: 5) {
-                        Circle().fill(store.online ? Color.green : Color.red).frame(width: 7, height: 7)
-                        Text(store.online ? "已连接" : "未连接")
-                            .font(.caption2).foregroundColor(MiTheme.subText)
-                    }
+                    MiLinkBadge()
+                    Text("数据每 30 秒自动同步，无需手动刷新")
+                        .miFont(9, relativeTo: .caption2)
+                        .foregroundColor(MiTheme.textTertiary)
                 }
                 Spacer()
                 Image(systemName: "chevron.right").font(.caption).foregroundColor(.gray)

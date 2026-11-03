@@ -351,7 +351,7 @@ struct MiNotifyCenterView: View {
         WatchClient.shared.fetchNotifications(limit: 30, since: since) { j in
             loading = false
             guard let j = j, j["ok"] as? Bool == true else {
-                err = "读取失败：手表未连接"
+                err = friendlyNetError("")      // 统一走人话文案
                 return
             }
             let incoming = j["list"] as? [[String: Any]] ?? []
