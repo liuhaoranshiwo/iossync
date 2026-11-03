@@ -800,10 +800,15 @@ struct MiAlarmView: View {
                 MiCard {
                     VStack(alignment: .leading, spacing: 10) {
                         HStack {
-                            Text("手表闹钟").font(.subheadline.weight(.semibold)).foregroundColor(MiTheme.text)
+                            Text("手表系统闹钟").font(.subheadline.weight(.semibold)).foregroundColor(MiTheme.text)
                             Spacer()
+                            Button("打开") {
+                                outbox.submit(["op": "open"]) { _ in }
+                            }.font(.caption).foregroundColor(MiTheme.orange)
                             Button("刷新") { load() }.font(.caption).foregroundColor(MiTheme.orange)
                         }
+                        Text("这里设的闹钟会直接写进手表自带的「闹钟」App，由系统负责响铃")
+                            .font(.miMicro).foregroundColor(MiTheme.textTertiary)
                         if outbox.count > 0 {
                             MiSyncBadge(state: .syncing, text: "待补发 \(outbox.count) 条，连上手表自动同步")
                         }
@@ -843,7 +848,9 @@ struct MiAlarmView: View {
                                         })).labelsHidden()
                                     Button {
                                         outbox.submit(["op": "remove", "id": a["id"] as? Int ?? 0]) { ok in
-                                            status = ok ? "" : "手表未连接：已排队，连上自动补发"
+                                            status = ok
+                                                ? "已从列表移除。手表系统闹钟未开放删除接口，请在手表「闹钟」里删除"
+                                                : "手表未连接：已排队，连上自动补发"
                                             if ok { load() }
                                         }
                                     } label: {
@@ -892,7 +899,7 @@ struct MiAlarmView: View {
                                 "days": Array(days).sorted(), "label": label,
                             ]) { ok in
                                 if ok {
-                                    status = "✓ 已写入手表，系统级精确响铃"
+                                    status = "✓ 已写入手表「闹钟」App，去手表上就能看到"
                                     label = ""
                                     load()
                                 } else {
