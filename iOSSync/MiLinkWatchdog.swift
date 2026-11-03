@@ -63,9 +63,14 @@ final class MiLinkWatchdog: ObservableObject {
         WatchClient.shared.ensureReachable { ok in
             self.checking = false
             if ok {
+                let recovered = (self.state != .healthy)
                 self.missed = 0
                 self.state = .healthy
                 self.lastSeen = Date()
+                if recovered {
+                    // 链路刚恢复：立刻让各页面拉一次，不用用户手动点
+                    MiSyncBus.shared.syncNow(reason: "link-up")
+                }
             } else {
                 self.missed += 1
                 if self.missed >= self.maxMissed {

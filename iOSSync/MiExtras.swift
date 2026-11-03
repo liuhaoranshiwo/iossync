@@ -68,6 +68,7 @@ struct MiSportRecordsView: View {
         .navigationTitle("运动记录")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { load() }
+        .onReceive(NotificationCenter.default.publisher(for: .miSyncTick)) { _ in load() }
     }
 
     private var summaryCard: some View {

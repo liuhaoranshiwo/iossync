@@ -41,6 +41,9 @@ struct MiHomeView: View {
             store.startPolling(); now = Date()
             health.requestAuth { _ in health.fetchAll {} }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .miLinkUp)) { _ in
+            health.fetchAll {}        // 链路恢复：补一次最新数据
+        }
     }
 
     // 手表离线诊断横幅
@@ -438,9 +441,14 @@ struct MiSportView: View {
         }
         .background(MiTheme.bg.ignoresSafeArea())
         .navigationBarHidden(true)
+        .onReceive(NotificationCenter.default.publisher(for: .miLinkUp)) { _ in
+            // 链路恢复：把上次失败的运动记录补拉一次
+            if records.isEmpty { loadRecords() }
+        }
         .onAppear {
             loadRecords()
             WatchClient.shared.overlayStatus { ok in overlayOK = ok }
+            MiSyncBus.shared.syncNow(reason: "sport-enter")
             // 若手表上已有进行中的运动则恢复显示
             WatchClient.shared.sportSnapshot { j in
                 if let j = j, j["exercising"] as? Bool == true {
@@ -1030,6 +1038,9 @@ struct MiAlarmView: View {
         .onAppear {
             outbox.startAutoFlush()
             outbox.flush { _ in load() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .miLinkUp)) { _ in
+            outbox.flush { _ in load() }          // 断连期间排队的闹钟，一连上就补发
         }
         .onDisappear { outbox.stopAutoFlush() }
     }
