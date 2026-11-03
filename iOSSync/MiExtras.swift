@@ -2,8 +2,38 @@ import SwiftUI
 
 // MARK: - 运动记录（手表 → 手机）
 
+/// 运动记录的本地缓存
+///
+/// 踩过的坑：只持久化了游标、没持久化列表。重进页面时 records 是空的，
+/// 而 since=游标 只回增量 → 列表永远是空的（看起来就是"同步不过来"）。
+/// 游标和缓存必须成对存在；缓存丢了就必须全量重建。
+enum MiSportCache {
+    private static let listKey = "sport_records_cache"
+    private static let cursorKey = "sport_cursor"
+
+    static func load() -> [[String: Any]] {
+        (UserDefaults.standard.array(forKey: listKey) as? [[String: Any]]) ?? []
+    }
+
+    static func save(_ list: [[String: Any]]) {
+        // 只留最近 200 条，避免 UserDefaults 越来越胖
+        UserDefaults.standard.set(Array(list.prefix(200)), forKey: listKey)
+    }
+
+    /// 统一用 Double 存取：之前 set(Int64) / as? Int64 的桥接不可靠，会拿到 0
+    static var cursor: Int64 {
+        get { Int64(UserDefaults.standard.double(forKey: cursorKey)) }
+        set { UserDefaults.standard.set(Double(newValue), forKey: cursorKey) }
+    }
+
+    static func reset() {
+        UserDefaults.standard.removeObject(forKey: listKey)
+        UserDefaults.standard.removeObject(forKey: cursorKey)
+    }
+}
+
 struct MiSportRecordsView: View {
-    @State private var records: [[String: Any]] = []
+    @State private var records: [[String: Any]] = MiSportCache.load()
     @State private var summary: [String: Any] = [:]
     @State private var loading = false
     @State private var err = ""
@@ -127,8 +157,11 @@ struct MiSportRecordsView: View {
 
     private func load() {
         loading = true; err = ""
-        // 游标：只拉比上次更新的记录，断连重连不用全量重来
-        let cursor = UserDefaults.standard.object(forKey: "sport_cursor") as? Int64 ?? 0
+        // 缓存为空 → 必须全量重建（否则 since 会把历史全跳过，页面永远是空的）
+        if records.isEmpty { records = MiSportCache.load() }
+        let cached = records
+        let since: Int64 = cached.isEmpty ? 0 : MiSportCache.cursor
+        let cursor = since
         WatchClient.shared.fetchSportRecords(limit: 30, since: cursor) { j in
             loading = false
             guard let j = j, j["ok"] as? Bool == true else {
@@ -160,10 +193,11 @@ struct MiSportRecordsView: View {
             records = byId.values.sorted {
                 ($0["start_at"] as? Double ?? 0) > ($1["start_at"] as? Double ?? 0)
             }
+            MiSportCache.save(records)          // 与游标成对落盘
 
             // 推进游标到手表已落库的最新一条
             if let newest = j["newest_at"] as? Double, newest > 0 {
-                UserDefaults.standard.set(Int64(newest), forKey: "sport_cursor")
+                MiSportCache.cursor = Int64(newest)
             }
         }
     }

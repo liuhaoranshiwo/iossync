@@ -9,7 +9,12 @@ final class WatchClient {
 
     var baseURL: String {
         get {
-            let s = UserDefaults.standard.string(forKey: "watch_base") ?? Self.defaultBase
+            var s = UserDefaults.standard.string(forKey: "watch_base") ?? Self.defaultBase
+            // 默认值是空串（不再写死 IP）；发现还没完成时回退到上次成功的地址，
+            // 否则 URL(string: "/sport/records") 是相对地址，请求必然失败。
+            if s.isEmpty {
+                s = UserDefaults.standard.string(forKey: "watch_base_last_ok") ?? ""
+            }
             return s.hasSuffix("/") ? String(s.dropLast()) : s
         }
         set {
@@ -48,6 +53,7 @@ final class WatchClient {
 
     /// 探活：能 ping 通就记住这个地址
     func ensureReachable(completion: @escaping (Bool) -> Void) {
+        guard !baseURL.isEmpty else { completion(false); return }
         getJSON("/ping") { j in
             if j?["ok"] as? Bool == true {
                 self.remember(self.baseURL)
