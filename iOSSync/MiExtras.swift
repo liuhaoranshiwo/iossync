@@ -205,6 +205,25 @@ struct MiSportRecordsView: View {
 
 // MARK: - 通知中心（手机 → 手表）
 
+/// 通知本地缓存（语义同 MiSportCache：列表与游标成对，缺一个就会退化成"永远空"）
+enum MiNotifyCache {
+    private static let listKey = "notify_cache"
+    private static let cursorKey = "notify_cursor"
+
+    static func load() -> [[String: Any]] {
+        (UserDefaults.standard.array(forKey: listKey) as? [[String: Any]]) ?? []
+    }
+
+    static func save(_ list: [[String: Any]]) {
+        UserDefaults.standard.set(Array(list.prefix(200)), forKey: listKey)
+    }
+
+    static var cursor: Int64 {
+        get { Int64(UserDefaults.standard.double(forKey: cursorKey)) }
+        set { UserDefaults.standard.set(Double(newValue), forKey: cursorKey) }
+    }
+}
+
 struct MiNotifyCenterView: View {
     @State private var items: [[String: Any]] = []
     @State private var activeCount = 0
@@ -326,14 +345,29 @@ struct MiNotifyCenterView: View {
 
     private func load() {
         loading = true; err = ""
-        WatchClient.shared.fetchNotifications(limit: 30) { j in
+        if items.isEmpty { items = MiNotifyCache.load() }        // 先显示缓存，不再空白
+        let since = items.isEmpty ? 0 : MiNotifyCache.cursor
+        WatchClient.shared.fetchNotifications(limit: 30, since: since) { j in
             loading = false
             guard let j = j, j["ok"] as? Bool == true else {
                 err = "读取失败：手表未连接"
                 return
             }
-            items = j["list"] as? [[String: Any]] ?? []
+            let incoming = j["list"] as? [[String: Any]] ?? []
+            // 按 id 去重合并（游标可能重叠）
+            var byId: [Int64: [String: Any]] = [:]
+            for n in items { if let id = n["id"] as? Int64 { byId[id] = n } }
+            for n in incoming { if let id = n["id"] as? Int64 { byId[id] = n } }
+            items = byId.values.sorted { ($0["at"] as? Double ?? 0) > ($1["at"] as? Double ?? 0) }
+            MiNotifyCache.save(items)
+
             activeCount = (j["active"] as? [[String: Any]])?.count ?? 0
+
+            // 确认：手表可以淘汰这些已收到的条目
+            if let newest = items.compactMap({ $0["at"] as? Double }).max(), newest > 0 {
+                MiNotifyCache.cursor = Int64(newest)
+                WatchClient.shared.getJSON("/notifications?limit=1&ack=\(Int64(newest))") { _ in }
+            }
         }
     }
 }
