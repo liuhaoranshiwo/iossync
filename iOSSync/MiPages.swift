@@ -416,6 +416,7 @@ struct MiDeviceView: View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 14) {
                 deviceCard
+                watchStatusCard
                 functionList
                 syncSection
             }
@@ -425,7 +426,61 @@ struct MiDeviceView: View {
         }
         .background(MiTheme.bg.ignoresSafeArea())
         .navigationBarHidden(true)
-        .onAppear { store.refresh() }
+        .onAppear {
+            store.refresh()
+            loadWatchStatus()
+        }
+    }
+
+    // MARK: 手表状态（步数 / 电量 / 心率 —— 由手表自己的传感器回报）
+    @State private var watchSteps = -1
+    @State private var watchBattery = -1
+    @State private var watchHr = -1
+    @State private var watchErr = ""
+
+    private func loadWatchStatus() {
+        WatchClient.shared.getJSON("/ping") { j in
+            guard let j = j, j["ok"] as? Bool == true else {
+                watchErr = "手表未连接"
+                return
+            }
+            watchErr = ""
+            if let h = j["health"] as? [String: Any] {
+                watchSteps = h["steps"] as? Int ?? -1
+                watchHr = h["heart_rate"] as? Int ?? -1
+            }
+            watchBattery = j["battery"] as? Int ?? -1
+        }
+    }
+
+    private var watchStatusCard: some View {
+        MiPanel {
+            MiSectionTitle(text: "手表状态", action: "刷新") { loadWatchStatus() }
+            HStack(spacing: MiSpace.sm) {
+                watchMetric("步数", watchSteps >= 0 ? "\(watchSteps)" : "—", "figure.walk")
+                watchMetric("电量", watchBattery >= 0 ? "\(watchBattery)%" : "—", "battery.75")
+                watchMetric("心率", watchHr > 0 ? "\(watchHr)" : "—", "heart.fill")
+            }
+            if !watchErr.isEmpty {
+                Text(watchErr).font(.miMicro).foregroundColor(MiTheme.danger)
+            } else {
+                Text("数据来自手表自身传感器，实时读取")
+                    .font(.miMicro).foregroundColor(MiTheme.textTertiary)
+            }
+        }
+    }
+
+    private func watchMetric(_ title: String, _ value: String, _ icon: String) -> some View {
+        VStack(spacing: MiSpace.xs) {
+            Image(systemName: icon)
+                .font(.system(size: 15))
+                .foregroundColor(MiTheme.orange)
+            Text(value).miNumber(20, weight: .bold).foregroundColor(MiTheme.text)
+            Text(title).font(.miMicro).foregroundColor(MiTheme.textTertiary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, MiSpace.sm)
+        .background(RoundedRectangle(cornerRadius: MiRadius.sm).fill(MiTheme.surfaceAlt))
     }
 
     private var deviceCard: some View {
