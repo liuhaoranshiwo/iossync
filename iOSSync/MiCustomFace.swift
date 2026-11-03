@@ -261,6 +261,13 @@ struct MiFacePreview: View {
             case "hr": out.append((hr > 0 ? "\(hr)" : "--", "心率"))
             case "battery": out.append(("\(battery)%", "电量"))
             case "date": out.append((dateText, "日期"))
+            // 下面这些在手表上显示真实数据，手机预览用示例值占位
+            case "notify": out.append(("3", "通知"))
+            case "alarm": out.append(("25分", "闹钟"))
+            case "weather": out.append(("26°", "天气"))
+            case "spo2": out.append(("97", "血氧"))
+            case "temp": out.append(("36.5", "体温"))
+            case "sync": out.append(("2分前", "同步"))
             default: break
             }
         }
@@ -450,6 +457,8 @@ struct MiCustomFaceView: View {
 
     private let slotOptions: [(String, String)] = [
         ("steps", "步数"), ("hr", "心率"), ("battery", "电量"),
+        ("alarm", "下个闹钟"), ("notify", "未读通知"), ("weather", "天气"),
+        ("spo2", "血氧"), ("temp", "体温"), ("sync", "上次同步"),
         ("date", "日期"), ("none", "不显示"),
     ]
 
@@ -499,6 +508,9 @@ struct MiCustomFaceView: View {
     private var elementCard: some View {
         MiPanel {
             MiSectionTitle(text: "复杂功能位")
+            Text("除步数/心率/电量外，还能放：下一个闹钟、未读通知、天气、血氧、体温、上次同步——这些都是手表自己算出来的，其他表盘给不了")
+                .font(.miMicro).foregroundColor(MiTheme.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
             slotRow(0)
             MiDivider()
             slotRow(1)
