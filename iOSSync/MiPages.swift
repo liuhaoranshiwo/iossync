@@ -763,6 +763,7 @@ struct MiNotifyView: View {
 // MARK: - 闹钟（真实写入手表系统闹钟：AlarmManager.setAlarmClock，表盘显示闹钟标记）
 
 struct MiAlarmView: View {
+    @ObservedObject private var outbox = AlarmOutbox.shared
     @State private var alarms: [[String: Any]] = []
     @State private var systemNext = ""
     @State private var status = ""
@@ -782,6 +783,9 @@ struct MiAlarmView: View {
                             Text("手表闹钟").font(.subheadline.weight(.semibold)).foregroundColor(MiTheme.text)
                             Spacer()
                             Button("刷新") { load() }.font(.caption).foregroundColor(MiTheme.orange)
+                        }
+                        if outbox.count > 0 {
+                            MiSyncBadge(state: .syncing, text: "待补发 \(outbox.count) 条，连上手表自动同步")
                         }
                         if alarms.isEmpty {
                             Text(status.isEmpty ? "暂无闹钟，在下方添加后写入手表" : status)
@@ -811,11 +815,17 @@ struct MiAlarmView: View {
                                         get: { a["enabled"] as? Bool ?? false },
                                         set: { on in
                                             let id = a["id"] as? Int ?? 0
-                                            WatchClient.shared.alarmOp("toggle", id: id) { _ in load() }
                                             _ = on
+                                            outbox.submit(["op": "toggle", "id": id]) { ok in
+                                                status = ok ? "" : "手表未连接：已排队，连上自动补发"
+                                                if ok { load() }
+                                            }
                                         })).labelsHidden()
                                     Button {
-                                        WatchClient.shared.alarmOp("remove", id: a["id"] as? Int ?? 0) { _ in load() }
+                                        outbox.submit(["op": "remove", "id": a["id"] as? Int ?? 0]) { ok in
+                                            status = ok ? "" : "手表未连接：已排队，连上自动补发"
+                                            if ok { load() }
+                                        }
                                     } label: {
                                         Image(systemName: "trash").font(.caption).foregroundColor(.red)
                                     }
@@ -857,13 +867,16 @@ struct MiAlarmView: View {
                             .padding(10)
                             .background(RoundedRectangle(cornerRadius: 8).fill(Color.gray.opacity(0.08)))
                         Button {
-                            WatchClient.shared.alarmOp("add", hour: hour, minute: minute,
-                                                       days: Array(days).sorted(), label: label) { j in
-                                if let j = j, j["ok"] as? Bool == true {
+                            outbox.submit([
+                                "op": "add", "hour": hour, "minute": minute,
+                                "days": Array(days).sorted(), "label": label,
+                            ]) { ok in
+                                if ok {
                                     status = "✓ 已写入手表，系统级精确响铃"
+                                    label = ""
                                     load()
                                 } else {
-                                    status = "写入失败"
+                                    status = "手表未连接：已排队 \(outbox.count) 条，连上后自动补发"
                                 }
                             }
                         } label: {
@@ -880,7 +893,11 @@ struct MiAlarmView: View {
         .background(MiTheme.bg.ignoresSafeArea())
         .navigationTitle("闹钟")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { load() }
+        .onAppear {
+            outbox.startAutoFlush()
+            outbox.flush { _ in load() }
+        }
+        .onDisappear { outbox.stopAutoFlush() }
     }
 
     private func load() {
