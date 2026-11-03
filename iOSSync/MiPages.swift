@@ -199,8 +199,8 @@ struct MiSportView: View {
     }
     /// 图标 / 名称 / 颜色 / 手表 ExerciseClient 类型
     private let sports: [(String, String, Color, String)] = [
-        ("outdoor.run", "户外跑", .green, "running"),
-        ("indoor.run", "室内跑", .orange, "indoor_run"),
+        ("figure.run", "户外跑", .green, "running"),
+        ("figure.run.treadmill", "室内跑", .orange, "indoor_run"),
         ("bicycle", "骑行", .blue, "cycling"),
         ("figure.pool.swim", "游泳", .cyan, "swimming"),
         ("dumbbell.fill", "力量训练", .purple, "strength"),
@@ -276,12 +276,42 @@ struct MiSportView: View {
         return d >= 1000 ? String(format: "%.2f km", d / 1000) : String(format: "%.0f m", d)
     }
 
-    private func metricCell(value: String, label: String) -> some View {
-        VStack(spacing: 2) {
-            Text(value).font(.system(size: 15, weight: .semibold, design: .rounded)).foregroundColor(MiTheme.text)
-            Text(label).font(.system(size: 9)).foregroundColor(MiTheme.subText)
+    /// 指标格：数值（等宽）+ 单位 + 标签，五格等宽对齐
+    private func metricCell(value: String, unit: String, label: String) -> some View {
+        VStack(spacing: 3) {
+            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                Text(value)
+                    .miNumber(17, weight: .semibold)
+                    .foregroundColor(MiTheme.text)
+                if !unit.isEmpty {
+                    Text(unit)
+                        .miFont(9, weight: .medium, relativeTo: .caption2)
+                        .foregroundColor(MiTheme.textTertiary)
+                }
+            }
+            Text(label)
+                .miFont(10, relativeTo: .caption2)
+                .foregroundColor(MiTheme.textTertiary)
         }
         .frame(maxWidth: .infinity)
+        .padding(.vertical, MiSpace.sm)
+        .background(RoundedRectangle(cornerRadius: MiRadius.sm, style: .continuous)
+            .fill(MiTheme.surfaceAlt))
+    }
+
+    /// 把系统网络错误译成人话，别把 NSURLError 原文糊到界面上
+    private func friendlyNetError(_ raw: String) -> String {
+        let lower = raw.lowercased()
+        if lower.contains("hostname could not be found") || lower.contains("cannot find host") {
+            return "找不到手表地址。确认手机和手表连同一个 Wi-Fi，或点「重新发现」重新定位手表。"
+        }
+        if lower.contains("timed out") || lower.contains("timeout") {
+            return "连接手表超时。手表可能息屏了，点亮后重试。"
+        }
+        if lower.contains("offline") || lower.contains("not connected") {
+            return "手表未连接。"
+        }
+        return raw
     }
 
     var body: some View {
@@ -302,14 +332,15 @@ struct MiSportView: View {
                             Text("当前运动：\(sportName(sportType))")
                                 .font(.caption2).foregroundColor(MiTheme.orange)
                         }
-                        HStack(spacing: 0) {
-                            metricCell(value: nativeMode ? "手表端" : "\(Int(metrics["heart_rate"] as? Double ?? 0))",
-                                       label: "心率 bpm")
-                            metricCell(value: nativeMode ? "手表端" : "\(metrics["steps"] as? Int ?? 0)", label: "步数")
-                            metricCell(value: nativeMode ? "手表端" : fmtDist(), label: "距离")
-                            metricCell(value: "\(metrics["duration_s"] as? Int ?? 0)s", label: "时长")
-                            metricCell(value: nativeMode ? "手表端" : String(format: "%.1f", metrics["calories"] as? Double ?? 0),
-                                       label: "千卡")
+                        HStack(alignment: .top, spacing: MiSpace.sm) {
+                            metricCell(value: nativeMode ? "—" : "\(Int(metrics["heart_rate"] as? Double ?? 0))",
+                                       unit: "bpm", label: "心率")
+                            metricCell(value: nativeMode ? "—" : "\(metrics["steps"] as? Int ?? 0)",
+                                       unit: "步", label: "步数")
+                            metricCell(value: nativeMode ? "—" : fmtDist(), unit: "", label: "距离")
+                            metricCell(value: "\(metrics["duration_s"] as? Int ?? 0)", unit: "s", label: "时长")
+                            metricCell(value: nativeMode ? "—" : String(format: "%.1f", metrics["calories"] as? Double ?? 0),
+                                       unit: "kcal", label: "消耗")
                         }
                         HStack(spacing: 10) {
                             if exercising {
@@ -332,27 +363,36 @@ struct MiSportView: View {
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                     ForEach(sports, id: \.1) { item in
                         let active = exercising && sportType == item.3
-                        VStack(spacing: 8) {
-                            Image(systemName: item.0).font(.title2)
-                                .foregroundColor(active ? .white : item.2)
-                            Text(item.1).font(.caption)
-                                .foregroundColor(active ? .white : MiTheme.text)
-                            if active {
-                                Text("运动中 · 点击结束")
-                                    .font(.system(size: 9)).foregroundColor(.white.opacity(0.9))
+                        VStack(spacing: MiSpace.sm) {
+                            // 图标统一放在浅色圆底里：有图标/没图标时视觉重量一致
+                            ZStack {
+                                Circle()
+                                    .fill(active ? Color.white.opacity(0.22) : item.2.opacity(0.12))
+                                    .frame(width: 40, height: 40)
+                                Image(systemName: item.0)
+                                    .font(.system(size: 18, weight: .medium))
+                                    .foregroundColor(active ? .white : item.2)
                             }
+                            Text(item.1)
+                                .miFont(13, weight: .medium, relativeTo: .caption)
+                                .foregroundColor(active ? .white : MiTheme.text)
+                                .lineLimit(1)
+                            Text(active ? "运动中 · 点击结束" : " ")
+                                .miFont(9, relativeTo: .caption2)
+                                .foregroundColor(active ? .white.opacity(0.9) : .clear)
+                                .lineLimit(1)
                         }
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, active ? 16 : 20)
+                        .padding(.vertical, MiSpace.md)
                         .background(
-                            RoundedRectangle(cornerRadius: 16)
-                                .fill(active ? MiTheme.orange : Color.white)
-                                .shadow(color: Color.black.opacity(0.04), radius: 6, y: 2)
+                            RoundedRectangle(cornerRadius: MiRadius.md, style: .continuous)
+                                .fill(active ? MiTheme.orange : MiTheme.surface)
                         )
                         .overlay(
-                            RoundedRectangle(cornerRadius: 16)
-                                .stroke(active ? Color.clear : Color.gray.opacity(0.08), lineWidth: 1)
+                            RoundedRectangle(cornerRadius: MiRadius.md, style: .continuous)
+                                .strokeBorder(active ? Color.clear : MiTheme.border, lineWidth: 0.75)
                         )
+                        .shadow(color: .black.opacity(active ? 0.10 : 0.03), radius: 8, y: 2)
                         .contentShape(Rectangle())
                         .onTapGesture { tapSport(item.3) }
                     }
@@ -369,8 +409,14 @@ struct MiSportView: View {
                             }
                         }
                         if records.isEmpty {
-                            Text(recErr.isEmpty ? "暂无运动记录（在手表开始运动后同步）" : recErr)
-                                .font(.caption2).foregroundColor(MiTheme.subText)
+                            if recErr.isEmpty {
+                                MiStateView(kind: .empty, title: "还没有运动记录",
+                                            message: "在上面选一个运动开始，结束后会出现在这里")
+                            } else {
+                                MiStateView(kind: .error, title: "读取运动记录失败",
+                                            message: friendlyNetError(recErr),
+                                            actionTitle: "重试") { loadRecords() }
+                            }
                         } else {
                             ForEach(records) { r in
                                 HStack {

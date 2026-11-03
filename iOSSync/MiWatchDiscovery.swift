@@ -72,8 +72,19 @@ extension WatchDiscovery: NetServiceBrowserDelegate, NetServiceDelegate {
     }
 
     func netServiceDidResolveAddress(_ sender: NetService) {
-        guard let hostRaw = sender.hostName, sender.port > 0 else { return }
-        let host = hostRaw.hasSuffix(".") ? String(hostRaw.dropLast()) : hostRaw
+        guard sender.port > 0 else { return }
+        // 优先用解析出来的 IPv4 地址。
+        // 用 hostName（形如 iOSync.local）时 URLSession 会报
+        // "A server with the specified hostname could not be found" —— iOS 的
+        // mDNS 解析在 App 内并不可靠，IP 直连才是稳的。
+        let host: String
+        if let ip = Self.ipv4(of: sender) {
+            host = ip
+        } else if let hostRaw = sender.hostName {
+            host = hostRaw.hasSuffix(".") ? String(hostRaw.dropLast()) : hostRaw
+        } else {
+            return
+        }
         found = "\(host):\(sender.port)"
         searching = false
         finished = true
@@ -84,6 +95,27 @@ extension WatchDiscovery: NetServiceBrowserDelegate, NetServiceDelegate {
             WatchClient.shared.baseURL = "http://\(found)"
         }
         stop()
+    }
+
+    /// 从 NetService 的地址列表里取第一个 IPv4
+    static func ipv4(of service: NetService) -> String? {
+        guard let addrs = service.addresses else { return nil }
+        for data in addrs {
+            var ip: String?
+            data.withUnsafeBytes { (raw: UnsafeRawBufferPointer) in
+                guard let base = raw.baseAddress else { return }
+                let sa = base.assumingMemoryBound(to: sockaddr.self)
+                guard sa.pointee.sa_family == sa_family_t(AF_INET) else { return }
+                let sin = base.assumingMemoryBound(to: sockaddr_in.self)
+                var addr = sin.pointee.sin_addr
+                var buf = [CChar](repeating: 0, count: Int(INET_ADDRSTRLEN))
+                if inet_ntop(AF_INET, &addr, &buf, socklen_t(INET_ADDRSTRLEN)) != nil {
+                    ip = String(cString: buf)
+                }
+            }
+            if let ip = ip, !ip.isEmpty, ip != "0.0.0.0" { return ip }
+        }
+        return nil
     }
 
     func netService(_ sender: NetService, didNotResolve errorDict: [String: NSNumber]) {
