@@ -494,6 +494,7 @@ struct MiSyncPanel: View {
     @State private var msgDraft = ""
     @State private var showAddr = false
     @State private var addrDraft = ""
+    @ObservedObject private var discovery = WatchDiscovery.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -513,6 +514,24 @@ struct MiSyncPanel: View {
                 .padding(10)
                 .background(RoundedRectangle(cornerRadius: 8).fill(Color.gray.opacity(0.08)))
 
+            // 自动发现：手表 IP 会变，这里用 Bonjour 找，不用手填
+            HStack(spacing: 6) {
+                Image(systemName: "dot.radiowaves.left.and.right")
+                    .font(.caption2).foregroundColor(MiTheme.orange)
+                Text(discovery.status.isEmpty ? "自动发现" : discovery.status)
+                    .font(.caption2).foregroundColor(MiTheme.subText)
+                    .lineLimit(1)
+                Spacer()
+                if discovery.searching {
+                    ProgressView().scaleEffect(0.6)
+                } else {
+                    Button("重新发现") {
+                        WatchClient.shared.manualOverride = false
+                        discovery.start()
+                    }
+                    .font(.caption2).foregroundColor(MiTheme.orange)
+                }
+            }
             HStack {
                 Text(status).font(.caption2).foregroundColor(MiTheme.subText)
                 Spacer()
@@ -549,8 +568,9 @@ struct MiSyncPanel: View {
                 .padding(.horizontal, 24)
             Button {
                 WatchClient.shared.baseURL = addrDraft
+                WatchClient.shared.manualOverride = true
                 showAddr = false
-                status = "地址已保存"
+                status = "地址已固定为 \(addrDraft)（自动发现已让位）"
             } label: {
                 Text("保存").font(.headline).foregroundColor(.white)
                     .frame(maxWidth: .infinity).padding(.vertical, 11)

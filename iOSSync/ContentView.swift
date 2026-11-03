@@ -25,6 +25,8 @@ struct ContentView: View {
         .onAppear {
             showLogin = !session.isLoggedIn
             MiSensorStore.shared.startPolling()
+            // 启动即自动发现手表（IP 每天都变，不能靠写死地址）
+            if !WatchClient.shared.manualOverride { WatchDiscovery.shared.start() }
             if !MiCloud.shared.serviceToken.isEmpty {
                 MiHealth.shared.fetchBoundDevices { _ in }
             }

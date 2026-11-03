@@ -17,6 +17,39 @@ final class WatchClient {
         }
     }
 
+    /// 用户手动填过地址→不再被自动发现覆盖
+    var manualOverride: Bool {
+        get { UserDefaults.standard.bool(forKey: "watch_manual") }
+        set { UserDefaults.standard.set(newValue, forKey: "watch_manual") }
+    }
+
+    /// 最近一次请求成功的地址，发现失败时可回退
+    func remember(_ url: String) {
+        UserDefaults.standard.set(url, forKey: "watch_base_last_ok")
+    }
+
+    private var lastDiscoverAt = Date.distantPast
+
+    /// 请求失败时顺手重新发现一次（20 秒内不重复触发，避免打转）
+    func maybeRediscover() {
+        guard !manualOverride else { return }
+        guard Date().timeIntervalSince(lastDiscoverAt) > 20 else { return }
+        lastDiscoverAt = Date()
+        WatchDiscovery.shared.start(timeout: 5)
+    }
+
+    /// 探活：能 ping 通就记住这个地址
+    func ensureReachable(completion: @escaping (Bool) -> Void) {
+        getJSON("/ping") { j in
+            if j?["ok"] as? Bool == true {
+                self.remember(self.baseURL)
+                completion(true)
+            } else {
+                completion(false)
+            }
+        }
+    }
+
     /// 一体化同步：健康 + 位置 + 时间戳
     func sync(steps: Double, heartRate: Double,
               lat: Double, lon: Double, name: String,
@@ -325,6 +358,9 @@ final class WatchClient {
             var out: [String: Any]?
             if let http = resp as? HTTPURLResponse, http.statusCode == 200, let data = data {
                 out = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+                self.remember(self.baseURL)
+            } else {
+                self.maybeRediscover()
             }
             DispatchQueue.main.async { completion(out) }
         }.resume()
@@ -343,6 +379,9 @@ final class WatchClient {
             var out: [String: Any]?
             if let http = resp as? HTTPURLResponse, http.statusCode == 200, let data = data {
                 out = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+                self.remember(self.baseURL)
+            } else {
+                self.maybeRediscover()
             }
             DispatchQueue.main.async { completion(out) }
         }.resume()
