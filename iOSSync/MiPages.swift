@@ -786,6 +786,7 @@ struct MiAlarmView: View {
     @ObservedObject private var outbox = AlarmOutbox.shared
     @State private var alarms: [[String: Any]] = []
     @State private var systemNext = ""
+    @State private var capsNote = ""
     @State private var status = ""
     @State private var hour = 7
     @State private var minute = 30
@@ -861,7 +862,12 @@ struct MiAlarmView: View {
                             }
                         }
                         if !systemNext.isEmpty {
-                            Text(systemNext).font(.system(size: 9)).foregroundColor(MiTheme.subText)
+                            Text(systemNext).font(.system(size: 10)).foregroundColor(MiTheme.textSecondary)
+                        }
+                        if !capsNote.isEmpty {
+                            Text(capsNote)
+                                .font(.miMicro).foregroundColor(MiTheme.textTertiary)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                 }
@@ -936,7 +942,15 @@ struct MiAlarmView: View {
             if let t = j["system_next_trigger_at"] as? Double, t > 0 {
                 let df = DateFormatter()
                 df.dateFormat = "MM-dd HH:mm"
-                systemNext = "系统下一个闹钟：" + df.string(from: Date(timeIntervalSince1970: t / 1000))
+                let when = df.string(from: Date(timeIntervalSince1970: t / 1000))
+                let mins = j["system_next_in_min"] as? Int ?? 0
+                systemNext = "手表系统下一个闹钟：\(when)（\(mins) 分钟后）"
+            } else {
+                systemNext = "手表系统当前没有排定的闹钟"
+            }
+            if let caps = j["capabilities"] as? [String: Any],
+               caps["delete"] as? Bool == false {
+                capsNote = "系统闹钟只开放「写入」：读取全量/删除需要 DeskClock 的签名权限，第三方拿不到，请在手表「闹钟」里增删。"
             }
         }
     }
