@@ -73,7 +73,10 @@ final class BleSync: NSObject, ObservableObject {
     private func sendPackets() {
         guard let data = pendingJSON,
               let p = peripheral, let ch = writeChar else { return }
-        let chunkSize = 180
+        // 分片按协商后的 MTU 走：maximumWriteValueLength 已扣掉 ATT 头，
+        // 再减 2 字节放 [seq][total] 包头。上限 180 是给老设备的保守值。
+        let mtu = p.maximumWriteValueLength(for: .withResponse)
+        let chunkSize = max(20, min(180, mtu - 2))
         var chunks: [Data] = []
         var offset = 0
         while offset < data.count {
