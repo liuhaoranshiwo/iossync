@@ -18,19 +18,18 @@ struct ContentView: View {
     }
 
     private var tabBody: some View {
+        // 桥接 App 只需要三个入口：连接 / 通知 / 设置
+        // 原来的健康、运动、表盘、闹钟全部收进「设置」二级页
         TabView {
-            NavigationView { MiHomeView() }
+            NavigationView { MiConnectView() }
                 .navigationViewStyle(.stack)
-                .tabItem { Label("健康", systemImage: "heart.text.square.fill") }
-            NavigationView { MiSportView() }
+                .tabItem { Label("连接", systemImage: "antenna.radiowaves.left.and.right") }
+            NavigationView { MiNotifyCenterView() }
                 .navigationViewStyle(.stack)
-                .tabItem { Label("运动", systemImage: "figure.run") }
-            NavigationView { MiDeviceView() }
+                .tabItem { Label("通知", systemImage: "bell.badge.fill") }
+            NavigationView { MiSettingsHubView() }
                 .navigationViewStyle(.stack)
-                .tabItem { Label("设备", systemImage: "applewatch") }
-            NavigationView { MiProfileView() }
-                .navigationViewStyle(.stack)
-                .tabItem { Label("我的", systemImage: "person.fill") }
+                .tabItem { Label("设置", systemImage: "gearshape.fill") }
         }
         .tint(MiTheme.orange)
         .fullScreenCover(isPresented: $showLogin) { MiLoginView() }
